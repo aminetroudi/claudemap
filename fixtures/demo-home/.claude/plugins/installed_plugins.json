@@ -1,0 +1,13 @@
+{
+  "plugins": {
+    "code-sweep@demo-garden": [
+      {
+        "scope": "user",
+        "installPath": "/__REPLACED_AT_RUNTIME__/.claude/plugins/cache/demo-garden/code-sweep/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-04-10T09:12:03.000Z",
+        "lastUpdated": "2026-04-10T09:12:03.000Z"
+      }
+    ]
+  }
+}

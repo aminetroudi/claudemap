@@ -4,8 +4,7 @@
 
 The plugin runs a Next.js app in the background. Open `http://127.0.0.1:3737` in your browser; browse, toggle, edit, promote/demote, install, uninstall — without hunting through scattered JSON and Markdown files.
 
-> ![screenshot placeholder — overview page]()
-> *screenshot placeholder*
+![Overview](./public/screenshots/overview.png)
 
 ---
 
@@ -32,6 +31,26 @@ bun run dev       # hot-reload dev server on :3000
 # or
 bun run build && bun run start    # prod server on :3000
 ```
+
+---
+
+## Running & stopping
+
+Once installed, the plugin spawns a **detached Next.js server** on every `SessionStart` (startup / clear / compact). The process survives your Claude Code session — if you close Claude Code, the dashboard keeps running. The server is idempotent: subsequent SessionStarts ping the port and skip spawning if it's already up.
+
+**Stop it:**
+```bash
+kill "$(cat ~/.claudemap/server.pid)"
+```
+
+**Confirm it's down:**
+```bash
+curl -sf http://127.0.0.1:3737/ -o /dev/null -w "HTTP %{http_code}\n"
+```
+
+**Disable auto-boot without uninstalling:** `/plugin disable claudemap@claudemap`.
+
+Your dashboard data (skills, plugins, settings, etc.) is read live from `~/.claude/` via `$HOME` — it is **not** stored inside the plugin cache. Reinstalling or deleting the plugin never touches your Claude setup.
 
 ---
 
@@ -94,11 +113,6 @@ rm -rf "$_R/.next" "$_R/node_modules"
 node "$_R/scripts/smart-install.mjs"
 ```
 
-**Kill the detached server**
-```bash
-kill "$(cat ~/.claudemap/server.pid)" 2>/dev/null
-```
-
 **Uninstall**
 ```text
 /plugin uninstall claudemap@claudemap
@@ -120,16 +134,45 @@ This is a **local power-user tool**, not a hosted service. It reads and writes f
 
 ---
 
+## Demo mode (for screenshots / evaluation)
+
+The repo ships a curated fixture `$HOME` at `fixtures/demo-home/` — fake skills, agents, plugins, MCP servers, memory entries. Boot a separate dashboard against it without exposing your real `~/.claude/`:
+
+```bash
+bun install && bun run build       # one-time
+node scripts/demo-run.mjs          # http://127.0.0.1:3738
+```
+
+- Demo `$HOME` is assembled at `/tmp/claudemap-demo/` — override with `CLAUDEMAP_DEMO_HOME`.
+- Port defaults to `3738` (avoids colliding with the plugin's `:3737`) — override with `CLAUDEMAP_PORT`.
+- Reseed from the fixture (after editing files via the UI) with `CLAUDEMAP_DEMO_RESEED=1 node scripts/demo-run.mjs`.
+- Stop with Ctrl+C. Nothing persists outside `/tmp/claudemap-demo/`.
+
+Use this for README screenshots, recorded demos, or trying the app without a real Claude Code setup.
+
+---
+
 ## Screenshots
 
-> ![screenshot placeholder — skills list]()
-> *screenshot placeholder*
+### Overview — constellation mode
 
-> ![screenshot placeholder — MCP panel]()
-> *screenshot placeholder*
+![Constellation](./public/screenshots/overview-constallation.png)
 
-> ![screenshot placeholder — marketplace]()
-> *screenshot placeholder*
+### Skills
+
+![Skills](./public/screenshots/skills.png)
+
+### MCP servers
+
+![MCP](./public/screenshots/mcp.png)
+
+### Marketplace
+
+![Marketplace](./public/screenshots/marketplace.png)
+
+### Settings
+
+![Settings](./public/screenshots/settings.png)
 
 ---
 

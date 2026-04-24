@@ -13,9 +13,17 @@ export const SETTINGS_GLOBAL = path.join(CLAUDE_DIR, "settings.json");
 export const SETTINGS_LOCAL = path.join(CLAUDE_DIR, "settings.local.json");
 export const HOME_MCP_JSON = path.join(HOME, ".mcp.json");
 export const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
-const HOME_PROJECT_KEY = pathToProjectKey(HOME);
-export const MEMORY_DIR = path.join(PROJECTS_DIR, HOME_PROJECT_KEY, "memory");
-export const MEMORY_INDEX = path.join(MEMORY_DIR, "MEMORY.md");
+// IMPORTANT: do NOT freeze memory paths as top-level constants.
+// Turbopack / SWC constant-folds `pathToProjectKey(HOME)` at build time,
+// baking the build-machine's $HOME into the bundle. That breaks any
+// deployment where runtime $HOME ≠ build-time $HOME (e.g. plugin installed
+// from an npm-published artifact). Resolve lazily on every call.
+export function memoryDir(): string {
+  return path.join(PROJECTS_DIR, pathToProjectKey(os.homedir()), "memory");
+}
+export function memoryIndex(): string {
+  return path.join(memoryDir(), "MEMORY.md");
+}
 
 // Claude's main config (stores mcpServers)
 export const CLAUDE_JSON = path.join(HOME, ".claude.json");

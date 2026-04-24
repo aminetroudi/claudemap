@@ -1,0 +1,29 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "demo-garden",
+  "description": "A sample marketplace used by claudemap screenshots and demos.",
+  "owner": {
+    "name": "Demo Gardener",
+    "url": "https://example.com"
+  },
+  "plugins": [
+    {
+      "name": "code-sweep",
+      "description": "Find leftover TODO/FIXME markers across the tree.",
+      "source": "./code-sweep",
+      "category": "productivity"
+    },
+    {
+      "name": "csv-wizard",
+      "description": "Lightweight CSV analysis from the terminal.",
+      "source": "./csv-wizard",
+      "category": "data"
+    },
+    {
+      "name": "daily-standup",
+      "description": "Compose a three-line standup note from git + tasks.",
+      "source": "./daily-standup",
+      "category": "productivity"
+    }
+  ]
+}

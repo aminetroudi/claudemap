@@ -1,23 +1,25 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { MEMORY_DIR, MEMORY_INDEX } from "../paths";
+import { memoryDir, memoryIndex } from "../paths";
 import { hashId, isDir, readFrontmatter, safeStat } from "../util";
 import type { MemoryItem } from "../types";
 
 export async function scanMemory(): Promise<MemoryItem[]> {
-  if (!(await isDir(MEMORY_DIR))) return [];
+  const memDir = memoryDir();
+  const memIdx = memoryIndex();
+  if (!(await isDir(memDir))) return [];
   const out: MemoryItem[] = [];
   let indexed: Set<string> = new Set();
   try {
-    const idx = await fs.readFile(MEMORY_INDEX, "utf8");
+    const idx = await fs.readFile(memIdx, "utf8");
     const re = /\(([^)]+\.md)\)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(idx))) indexed.add(m[1]);
   } catch {}
-  const entries = await fs.readdir(MEMORY_DIR);
+  const entries = await fs.readdir(memDir);
   for (const name of entries) {
     if (!name.endsWith(".md") || name === "MEMORY.md") continue;
-    const file = path.join(MEMORY_DIR, name);
+    const file = path.join(memDir, name);
     const fm = await readFrontmatter(file);
     const stat = await safeStat(file);
     out.push({
@@ -36,14 +38,14 @@ export async function scanMemory(): Promise<MemoryItem[]> {
     });
   }
   // Index file itself
-  const idxStat = await safeStat(MEMORY_INDEX);
+  const idxStat = await safeStat(memIdx);
   if (idxStat) {
     out.unshift({
-      id: hashId("memory", MEMORY_INDEX),
+      id: hashId("memory", memIdx),
       kind: "memory",
       scope: "global",
       name: "MEMORY.md (index)",
-      path: MEMORY_INDEX,
+      path: memIdx,
       modifiedAt: idxStat.mtime.toISOString(),
       size: idxStat.size,
       meta: { memoryType: "index", indexed: true },
