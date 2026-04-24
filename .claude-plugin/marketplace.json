@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claudemap",
+  "description": "Local dashboard for your Claude Code setup — skills, agents, plugins, MCP, memory, marketplaces.",
+  "owner": {
+    "name": "protoxy",
+    "url": "https://github.com/protoxy"
+  },
+  "plugins": [
+    {
+      "name": "claudemap",
+      "description": "Browse, edit, and organize everything under ~/.claude via a local web dashboard.",
+      "source": "./",
+      "category": "productivity",
+      "keywords": ["claude-code", "dashboard", "skills", "plugins", "mcp", "memory"]
+    }
+  ]
+}

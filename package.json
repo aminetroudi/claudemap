@@ -1,5 +1,5 @@
 {
-  "name": "claude-dashboard",
+  "name": "claudemap",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,16 +8,28 @@
     "start": "next start"
   },
   "dependencies": {
+    "cmdk": "^1.1.1",
+    "fast-glob": "^3.3.3",
+    "framer-motion": "^12.38.0",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.1",
+    "lucide-react": "^1.8.0",
     "next": "16.2.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "trustedDependencies": [
+    "sharp",
+    "unrs-resolver"
+  ]
 }
