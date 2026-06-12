@@ -107,6 +107,8 @@ export interface HistorySession {
   firstPrompt: string;
   lastMessage?: string;
   logFile: string;
+  /** Recorded working directory, when known — used to open a Resume terminal there. */
+  cwd?: string;
 }
 
 export interface HistoryResult {

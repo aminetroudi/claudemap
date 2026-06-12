@@ -11,6 +11,8 @@ import {
   uninstallPlugin,
   updateMcpServer,
 } from "@/lib/actions";
+import { killGhostProcesses } from "@/lib/sessions/ghosts";
+import { spawnSessionTerminal, type TerminalMode } from "@/lib/sessions/terminal";
 import type { McpServer } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +29,9 @@ interface ActionBody {
     | "installPlugin"
     | "addMcp"
     | "updateMcp"
-    | "deleteMcp";
+    | "deleteMcp"
+    | "session-open-terminal"
+    | "session-kill-ghosts";
   // shared
   path?: string;
   // move
@@ -43,6 +47,11 @@ interface ActionBody {
   oldName?: string;
   mcpName?: string;
   mcpScope?: "global" | "project";
+  // session terminal
+  mode?: TerminalMode;
+  attachId?: string;
+  sessionId?: string;
+  cwd?: string;
 }
 
 export async function POST(req: Request) {
@@ -94,6 +103,18 @@ export async function POST(req: Request) {
         if (!body.mcpName || !body.mcpScope) throw new Error("mcpName & mcpScope required");
         await deleteMcpServer(body.mcpName, body.mcpScope, body.projectRoot);
         return NextResponse.json({ ok: true });
+      case "session-open-terminal": {
+        if (!body.cwd || !body.mode) throw new Error("cwd & mode required");
+        const result = await spawnSessionTerminal({
+          mode: body.mode,
+          cwd: body.cwd,
+          attachId: body.attachId,
+          sessionId: body.sessionId,
+        });
+        return NextResponse.json(result);
+      }
+      case "session-kill-ghosts":
+        return NextResponse.json({ ok: true, ...(await killGhostProcesses()) });
       default:
         return NextResponse.json({ error: "unknown action" }, { status: 400 });
     }

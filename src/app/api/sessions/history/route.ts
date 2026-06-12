@@ -47,6 +47,7 @@ export async function GET(req: Request): Promise<Response> {
         messageCount: q.messageCount,
         lastMessage: s.lastMessage,
         logFile: s.logFile,
+        cwd: s.projectPath || q.cwd || undefined,
       };
       sessions.push(merged);
       seen.add(s.logFile);

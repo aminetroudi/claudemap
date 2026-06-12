@@ -1,14 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, GitBranch, History, Radio, Wifi, WifiOff } from "lucide-react";
-import { fetchSessions } from "@/lib/client";
+import { Activity, BarChart3, GitBranch, History, Radio, Skull, TerminalSquare, Wifi, WifiOff } from "lucide-react";
+import { fetchSessions, killGhosts, openSessionTerminal } from "@/lib/client";
 import { contextWindowForModel, EXTENDED_CONTEXT_WINDOW } from "@/lib/sessions/context";
 import type { LiveSession, SessionStatus } from "@/lib/sessions/types";
 import HistoryView from "./sessions/HistoryView";
 import SessionDrawer from "./sessions/SessionDrawer";
 import UsageView from "./sessions/UsageView";
 import { formatTokens, relativeTime } from "./sessions/format";
+
+export interface TerminalPayload {
+  mode: "attach" | "resume" | "shell";
+  cwd?: string;
+  attachId?: string;
+  sessionId?: string;
+}
+type TerminalFn = (p: TerminalPayload) => void;
 
 const STATUS_META: Record<SessionStatus, { dot: string; label: string; color: string }> = {
   working: { dot: "●", label: "Working", color: "var(--green)" },
@@ -36,7 +44,31 @@ const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
 export default function SessionsPanel() {
   const [tab, setTab] = useState<Tab>("live");
   const [drawer, setDrawer] = useState<{ file: string; label: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const openDetail: OpenFn = useCallback((file, label) => setDrawer({ file, label }), []);
+
+  // Auto-dismiss the action notice.
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 4500);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  const runTerminal: TerminalFn = useCallback((p) => {
+    if (!p.cwd) {
+      setNotice({ kind: "err", text: "No working directory known for this session." });
+      return;
+    }
+    openSessionTerminal({ mode: p.mode, cwd: p.cwd, attachId: p.attachId, sessionId: p.sessionId })
+      .then((r) => setNotice({ kind: "ok", text: `Opened ${p.mode} terminal (${r.emulator}).` }))
+      .catch((e) => setNotice({ kind: "err", text: (e as Error).message }));
+  }, []);
+
+  const runKillGhosts = useCallback(() => {
+    killGhosts()
+      .then((r) => setNotice({ kind: "ok", text: `Killed ${r.killed} ghost${r.killed !== 1 ? "s" : ""}.` }))
+      .catch((e) => setNotice({ kind: "err", text: (e as Error).message }));
+  }, []);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -61,8 +93,25 @@ export default function SessionsPanel() {
         ))}
       </div>
 
-      {tab === "live" && <LiveView onOpen={openDetail} />}
-      {tab === "history" && <HistoryView onOpen={openDetail} />}
+      {notice && (
+        <div
+          onClick={() => setNotice(null)}
+          style={{
+            padding: "10px 14px",
+            borderRadius: "var(--r)",
+            cursor: "pointer",
+            fontSize: "var(--t-md)",
+            background: notice.kind === "ok" ? "var(--green-dim)" : "var(--red-dim)",
+            border: `1px solid ${notice.kind === "ok" ? "rgba(52 211 153 / 0.25)" : "rgba(248 113 113 / 0.25)"}`,
+            color: notice.kind === "ok" ? "var(--green)" : "var(--red)",
+          }}
+        >
+          {notice.text}
+        </div>
+      )}
+
+      {tab === "live" && <LiveView onOpen={openDetail} onTerminal={runTerminal} onKillGhosts={runKillGhosts} />}
+      {tab === "history" && <HistoryView onOpen={openDetail} onTerminal={runTerminal} />}
       {tab === "usage" && <UsageView />}
 
       {drawer && (
@@ -72,8 +121,57 @@ export default function SessionsPanel() {
   );
 }
 
+/** Decide which terminal action a live session supports (Phase 0.3 semantics):
+ * background job → Attach; running interactive → Terminal here; else Resume. */
+function liveAction(s: LiveSession): { label: string; payload: TerminalPayload } {
+  const cwd = s.projectPath;
+  if (s.kind === "background" && s.attachId) {
+    return { label: "Attach", payload: { mode: "attach", attachId: s.attachId, cwd } };
+  }
+  if (s.kind === "interactive" && s.pid) {
+    return { label: "Terminal here", payload: { mode: "shell", cwd } };
+  }
+  return { label: "Resume", payload: { mode: "resume", sessionId: s.sessionId, cwd } };
+}
+
+function ActionButton({
+  label,
+  payload,
+  onTerminal,
+}: {
+  label: string;
+  payload: TerminalPayload;
+  onTerminal: TerminalFn;
+}) {
+  const resumeReady = payload.mode !== "resume" || !!payload.sessionId;
+  const disabled = !payload.cwd || !resumeReady;
+  return (
+    <button
+      className="btn"
+      disabled={disabled}
+      title={disabled ? "Working directory unknown" : label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onTerminal(payload);
+      }}
+      style={{ fontSize: "var(--t-sm)", whiteSpace: "nowrap" }}
+    >
+      <TerminalSquare size={13} />
+      {label}
+    </button>
+  );
+}
+
 // ── Live view (SSE) ───────────────────────────────────────────────
-function LiveView({ onOpen }: { onOpen: OpenFn }) {
+function LiveView({
+  onOpen,
+  onTerminal,
+  onKillGhosts,
+}: {
+  onOpen: OpenFn;
+  onTerminal: TerminalFn;
+  onKillGhosts: () => void;
+}) {
   const [sessions, setSessions] = useState<LiveSession[] | null>(null);
   const [conn, setConn] = useState<ConnState>("connecting");
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -141,6 +239,13 @@ function LiveView({ onOpen }: { onOpen: OpenFn }) {
     meta: STATUS_META[st],
     n: list.filter((s) => s.status === st).length,
   }));
+  const ghostCount = list.filter((s) => s.isGhost).length;
+
+  const confirmKillGhosts = () => {
+    if (window.confirm(`Send SIGTERM to ${ghostCount} ghost process${ghostCount !== 1 ? "es" : ""}?`)) {
+      onKillGhosts();
+    }
+  };
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -159,7 +264,18 @@ function LiveView({ onOpen }: { onOpen: OpenFn }) {
             ))
           )}
         </div>
-        <ConnBadge conn={conn} />
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {ghostCount > 0 && (
+            <button
+              className="btn"
+              onClick={confirmKillGhosts}
+              style={{ color: "var(--red)", borderColor: "rgba(248 113 113 / 0.3)" }}
+            >
+              <Skull size={14} /> Kill ghosts ({ghostCount})
+            </button>
+          )}
+          <ConnBadge conn={conn} />
+        </div>
       </div>
 
       {errMsg && (
@@ -189,11 +305,12 @@ function LiveView({ onOpen }: { onOpen: OpenFn }) {
                 <Th>Branch</Th>
                 <Th>Last activity</Th>
                 <Th>Task / last message</Th>
+                <Th>Action</Th>
               </tr>
             </thead>
             <tbody>
               {list.map((s) => (
-                <SessionRow key={s.logFile} session={s} onOpen={onOpen} />
+                <SessionRow key={s.logFile} session={s} onOpen={onOpen} onTerminal={onTerminal} />
               ))}
             </tbody>
           </table>
@@ -246,9 +363,18 @@ function ContextBar({ percent, tokens, model }: { percent?: number; tokens?: num
   );
 }
 
-function SessionRow({ session: s, onOpen }: { session: LiveSession; onOpen: OpenFn }) {
+function SessionRow({
+  session: s,
+  onOpen,
+  onTerminal,
+}: {
+  session: LiveSession;
+  onOpen: OpenFn;
+  onTerminal: TerminalFn;
+}) {
   const meta = STATUS_META[s.status] ?? STATUS_META.inactive;
   const detail = s.task !== "-" && s.task ? s.task : s.lastMessage ?? "—";
+  const action = liveAction(s);
 
   return (
     <tr
@@ -272,6 +398,11 @@ function SessionRow({ session: s, onOpen }: { session: LiveSession; onOpen: Open
           {s.hasUnsandboxed && (
             <span className="badge badge-red" title="Unsandboxed bash command(s) detected">
               [!S]
+            </span>
+          )}
+          {s.isGhost && (
+            <span className="badge badge-red" title="Process alive but idle > 1h">
+              ghost
             </span>
           )}
           {s.sessionTitle && (
@@ -301,6 +432,9 @@ function SessionRow({ session: s, onOpen }: { session: LiveSession; onOpen: Open
         <div className="truncate" style={{ color: "var(--tx-2)" }} title={s.lastMessage ?? detail}>
           {detail}
         </div>
+      </td>
+      <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+        <ActionButton label={action.label} payload={action.payload} onTerminal={onTerminal} />
       </td>
     </tr>
   );

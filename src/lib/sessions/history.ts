@@ -206,6 +206,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
         messageCount: entry.messageCount ?? 0,
         firstPrompt: entry.firstPrompt ?? "",
         logFile: entry.fullPath,
+        cwd: entry.projectPath || undefined,
       });
       seen.add(entry.fullPath);
     }
@@ -254,6 +255,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
         durationMs: Math.max(0, end - start),
         messageCount: q.messageCount,
         logFile,
+        cwd: q.cwd || undefined,
       });
       seen.add(logFile);
     }

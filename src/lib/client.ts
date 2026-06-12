@@ -65,6 +65,19 @@ export async function fetchUsage(): Promise<UsageResult> {
   return r.json();
 }
 
+export async function openSessionTerminal(input: {
+  mode: "attach" | "resume" | "shell";
+  cwd: string;
+  attachId?: string;
+  sessionId?: string;
+}): Promise<{ ok: true; emulator: string; mode: string }> {
+  return callAction({ action: "session-open-terminal", ...input });
+}
+
+export async function killGhosts(): Promise<{ ok: true; killed: number }> {
+  return callAction({ action: "session-kill-ghosts" });
+}
+
 export async function fetchMarketplaces() {
   const r = await fetch("/api/marketplaces", { cache: "no-store" });
   return (await r.json()).marketplaces;

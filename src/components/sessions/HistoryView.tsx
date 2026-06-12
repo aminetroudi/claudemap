@@ -1,14 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { GitBranch, History, Search } from "lucide-react";
+import { GitBranch, History, Search, TerminalSquare } from "lucide-react";
 import { fetchHistory } from "@/lib/client";
 import type { HistorySession } from "@/lib/sessions/types";
+import type { TerminalPayload } from "../SessionsPanel";
 import { dateGroup, formatDuration, relativeTime } from "./format";
 
 const DAYS_OPTIONS = [1, 7, 30, 90] as const;
 
-export default function HistoryView({ onOpen }: { onOpen: (file: string, label: string) => void }) {
+function sessionIdFromLog(logFile: string): string {
+  return (logFile.split("/").pop() ?? "").replace(/\.jsonl$/, "");
+}
+
+export default function HistoryView({
+  onOpen,
+  onTerminal,
+}: {
+  onOpen: (file: string, label: string) => void;
+  onTerminal: (p: TerminalPayload) => void;
+}) {
   const [days, setDays] = useState<number>(7);
   const [sessions, setSessions] = useState<HistorySession[] | null>(null);
   const [q, setQ] = useState("");
@@ -146,8 +157,22 @@ export default function HistoryView({ onOpen }: { onOpen: (file: string, label: 
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
                   <span className="truncate" style={{ fontWeight: 600 }}>{s.project}</span>
-                  <span className="faint" style={{ fontSize: "var(--t-sm)", whiteSpace: "nowrap" }} title={s.startTime}>
-                    {relativeTime(s.startTime)}
+                  <span style={{ display: "inline-flex", gap: 10, alignItems: "center", whiteSpace: "nowrap" }}>
+                    <span className="faint" style={{ fontSize: "var(--t-sm)" }} title={s.startTime}>
+                      {relativeTime(s.startTime)}
+                    </span>
+                    <button
+                      className="btn"
+                      disabled={!s.cwd}
+                      title={s.cwd ? "Resume this session in a terminal" : "Working directory unknown"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTerminal({ mode: "resume", sessionId: sessionIdFromLog(s.logFile), cwd: s.cwd });
+                      }}
+                      style={{ fontSize: "var(--t-sm)" }}
+                    >
+                      <TerminalSquare size={13} /> Resume
+                    </button>
                   </span>
                 </div>
                 {s.firstPrompt && (

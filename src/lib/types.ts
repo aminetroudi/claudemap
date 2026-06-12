@@ -128,4 +128,7 @@ export interface AppConfig {
   excludeProjects: string[]; // project roots to skip
   looseMdMaxDepth: number;
   looseMdMaxFiles: number;
+  /** Optional terminal-emulator binary to prefer when opening a session
+   * terminal (Sessions view). Falls back to x-terminal-emulator/gnome-terminal/tilix. */
+  terminalEmulator?: string;
 }
