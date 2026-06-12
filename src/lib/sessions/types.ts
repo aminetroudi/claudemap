@@ -31,6 +31,8 @@ export interface LiveSession {
   contextPercent?: number;
   contextTokens?: number;
   model?: string;
+  /** True when the session was spawned by a plugin/skill/hook, not the user. */
+  automated?: boolean;
 }
 
 export interface SessionsResult {
@@ -109,6 +111,8 @@ export interface HistorySession {
   logFile: string;
   /** Recorded working directory, when known — used to open a Resume terminal there. */
   cwd?: string;
+  /** True when the session was spawned by a plugin/skill/hook, not the user. */
+  automated?: boolean;
 }
 
 export interface HistoryResult {

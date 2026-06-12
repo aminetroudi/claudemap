@@ -7,6 +7,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PROJECTS_DIR } from "../paths";
+import { isAutomatedSession } from "./classify";
 import { extractContextUsage } from "./context";
 import { readLastEntries } from "./jsonl";
 import { resolveOrigin } from "./origin";
@@ -185,9 +186,10 @@ async function parseSession(
   // non-running sessions — resolveOrigin is cache-only without a pid.
   const origin = await resolveOrigin(sessionId, proc?.pid);
 
+  const project = cwd ? extractProjectName(cwd) : decodeProjectName(encodedName);
   const session: LiveSession = {
     sessionId,
-    project: cwd ? extractProjectName(cwd) : decodeProjectName(encodedName),
+    project,
     projectPath: cwd || undefined,
     logFile,
     status,
@@ -205,6 +207,7 @@ async function parseSession(
     contextPercent: context.contextTokens > 0 ? context.contextPercent : undefined,
     contextTokens: context.contextTokens > 0 ? context.contextTokens : undefined,
     model: context.model || undefined,
+    automated: isAutomatedSession({ cwd, project }) || undefined,
   };
   if (proc && Date.now() - lastActivityMs > GHOST_AGE_MS) session.isGhost = true;
   return session;

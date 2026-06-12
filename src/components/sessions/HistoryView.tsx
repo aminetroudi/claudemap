@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { GitBranch, History, Search, TerminalSquare } from "lucide-react";
+import { Eye, EyeOff, GitBranch, History, Search, TerminalSquare } from "lucide-react";
 import { fetchHistory } from "@/lib/client";
 import type { HistorySession } from "@/lib/sessions/types";
 import type { TerminalPayload } from "../SessionsPanel";
@@ -16,9 +16,13 @@ function sessionIdFromLog(logFile: string): string {
 export default function HistoryView({
   onOpen,
   onTerminal,
+  showAutomated,
+  onToggleAutomated,
 }: {
   onOpen: (file: string, label: string) => void;
   onTerminal: (p: TerminalPayload) => void;
+  showAutomated: boolean;
+  onToggleAutomated: () => void;
 }) {
   const [days, setDays] = useState<number>(7);
   const [sessions, setSessions] = useState<HistorySession[] | null>(null);
@@ -54,8 +58,11 @@ export default function HistoryView({
     };
   }, [days]);
 
+  const automatedCount = (sessions ?? []).filter((s) => s.automated).length;
+
   const filtered = useMemo(() => {
-    const list = sessions ?? [];
+    let list = sessions ?? [];
+    if (!showAutomated) list = list.filter((s) => !s.automated);
     const needle = q.trim().toLowerCase();
     if (!needle) return list;
     return list.filter(
@@ -63,7 +70,7 @@ export default function HistoryView({
         s.project.toLowerCase().includes(needle) ||
         s.firstPrompt.toLowerCase().includes(needle),
     );
-  }, [sessions, q]);
+  }, [sessions, q, showAutomated]);
 
   // Group consecutively — list is already sorted newest-first by the API.
   const groups = useMemo(() => {
@@ -110,6 +117,17 @@ export default function HistoryView({
             </button>
           ))}
         </div>
+        {(showAutomated || automatedCount > 0) && (
+          <button
+            className="btn"
+            onClick={onToggleAutomated}
+            title="Sessions spawned by plugins/skills/hooks (e.g. claude-mem), not started by you"
+            style={{ fontSize: "var(--t-sm)" }}
+          >
+            {showAutomated ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showAutomated ? "Hide plugin sessions" : `Show plugin sessions (${automatedCount})`}
+          </button>
+        )}
       </div>
 
       {err && (

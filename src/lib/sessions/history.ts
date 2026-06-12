@@ -12,6 +12,7 @@ import { createReadStream } from "node:fs";
 import readline from "node:readline";
 import path from "node:path";
 import { PROJECTS_DIR } from "../paths";
+import { isAutomatedSession } from "./classify";
 import { decodeProjectName, extractProjectName } from "./discover";
 import type { HistorySession } from "./types";
 
@@ -197,8 +198,9 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
       if (Number.isNaN(start) || start < cutoff) continue;
       let end = entry.modified ? Date.parse(entry.modified) : start;
       if (Number.isNaN(end)) end = start;
+      const project = extractProjectName(entry.projectPath ?? "");
       sessions.push({
-        project: extractProjectName(entry.projectPath ?? ""),
+        project,
         gitBranch: entry.gitBranch || undefined,
         startTime: new Date(start).toISOString(),
         endTime: new Date(end).toISOString(),
@@ -207,6 +209,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
         firstPrompt: entry.firstPrompt ?? "",
         logFile: entry.fullPath,
         cwd: entry.projectPath || undefined,
+        automated: isAutomatedSession({ cwd: entry.projectPath, project }) || undefined,
       });
       seen.add(entry.fullPath);
     }
@@ -256,6 +259,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
         messageCount: q.messageCount,
         logFile,
         cwd: q.cwd || undefined,
+        automated: isAutomatedSession({ cwd: q.cwd, project: displayName }) || undefined,
       });
       seen.add(logFile);
     }

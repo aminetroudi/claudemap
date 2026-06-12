@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, GitBranch, History, Radio, Skull, TerminalSquare, Wifi, WifiOff } from "lucide-react";
+import { Activity, BarChart3, Eye, EyeOff, GitBranch, History, Radio, Skull, TerminalSquare, Wifi, WifiOff } from "lucide-react";
 import { fetchSessions, killGhosts, openSessionTerminal } from "@/lib/client";
 import { contextWindowForModel, EXTENDED_CONTEXT_WINDOW } from "@/lib/sessions/context";
 import type { LiveSession, SessionStatus } from "@/lib/sessions/types";
@@ -45,6 +45,9 @@ export default function SessionsPanel() {
   const [tab, setTab] = useState<Tab>("live");
   const [drawer, setDrawer] = useState<{ file: string; label: string } | null>(null);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // Plugin/skill-spawned sessions are hidden by default; shared across tabs.
+  const [showAutomated, setShowAutomated] = useState(false);
+  const toggleAutomated = useCallback(() => setShowAutomated((v) => !v), []);
   const openDetail: OpenFn = useCallback((file, label) => setDrawer({ file, label }), []);
 
   // Auto-dismiss the action notice.
@@ -110,8 +113,23 @@ export default function SessionsPanel() {
         </div>
       )}
 
-      {tab === "live" && <LiveView onOpen={openDetail} onTerminal={runTerminal} onKillGhosts={runKillGhosts} />}
-      {tab === "history" && <HistoryView onOpen={openDetail} onTerminal={runTerminal} />}
+      {tab === "live" && (
+        <LiveView
+          onOpen={openDetail}
+          onTerminal={runTerminal}
+          onKillGhosts={runKillGhosts}
+          showAutomated={showAutomated}
+          onToggleAutomated={toggleAutomated}
+        />
+      )}
+      {tab === "history" && (
+        <HistoryView
+          onOpen={openDetail}
+          onTerminal={runTerminal}
+          showAutomated={showAutomated}
+          onToggleAutomated={toggleAutomated}
+        />
+      )}
       {tab === "usage" && <UsageView />}
 
       {drawer && (
@@ -132,6 +150,30 @@ function liveAction(s: LiveSession): { label: string; payload: TerminalPayload }
     return { label: "Terminal here", payload: { mode: "shell", cwd } };
   }
   return { label: "Resume", payload: { mode: "resume", sessionId: s.sessionId, cwd } };
+}
+
+/** Show/hide toggle for plugin/skill/automation-spawned sessions. */
+function AutomatedToggle({
+  show,
+  automatedCount,
+  onToggle,
+}: {
+  show: boolean;
+  automatedCount: number;
+  onToggle: () => void;
+}) {
+  if (!show && automatedCount === 0) return null; // nothing hidden, nothing to offer
+  return (
+    <button
+      className="btn"
+      onClick={onToggle}
+      title="Sessions spawned by plugins/skills/hooks (e.g. claude-mem), not started by you"
+      style={{ fontSize: "var(--t-sm)" }}
+    >
+      {show ? <EyeOff size={14} /> : <Eye size={14} />}
+      {show ? "Hide plugin sessions" : `Show plugin sessions (${automatedCount})`}
+    </button>
+  );
 }
 
 function ActionButton({
@@ -167,10 +209,14 @@ function LiveView({
   onOpen,
   onTerminal,
   onKillGhosts,
+  showAutomated,
+  onToggleAutomated,
 }: {
   onOpen: OpenFn;
   onTerminal: TerminalFn;
   onKillGhosts: () => void;
+  showAutomated: boolean;
+  onToggleAutomated: () => void;
 }) {
   const [sessions, setSessions] = useState<LiveSession[] | null>(null);
   const [conn, setConn] = useState<ConnState>("connecting");
@@ -233,7 +279,9 @@ function LiveView({
     };
   }, [fallbackFetch]);
 
-  const list = sessions ?? [];
+  const all = sessions ?? [];
+  const automatedCount = all.filter((s) => s.automated).length;
+  const list = showAutomated ? all : all.filter((s) => !s.automated);
   const counts = SUMMARY_ORDER.map((st) => ({
     st,
     meta: STATUS_META[st],
@@ -264,7 +312,8 @@ function LiveView({
             ))
           )}
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <AutomatedToggle show={showAutomated} automatedCount={automatedCount} onToggle={onToggleAutomated} />
           {ghostCount > 0 && (
             <button
               className="btn"
