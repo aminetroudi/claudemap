@@ -12,7 +12,8 @@ import { createReadStream } from "node:fs";
 import readline from "node:readline";
 import path from "node:path";
 import { PROJECTS_DIR } from "../paths";
-import { isAutomatedSession } from "./classify";
+import { loadConfig } from "../config";
+import { isAutomatedSession, isExcludedCwd } from "./classify";
 import { decodeProjectName, extractProjectName } from "./discover";
 import type { HistorySession } from "./types";
 
@@ -183,6 +184,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
   }
 
   const cutoff = Date.now() - days * DAY_MS;
+  const { excludePaths } = await loadConfig();
   const seen = new Set<string>();
   const sessions: HistorySession[] = [];
 
@@ -198,6 +200,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
       if (Number.isNaN(start) || start < cutoff) continue;
       let end = entry.modified ? Date.parse(entry.modified) : start;
       if (Number.isNaN(end)) end = start;
+      if (isExcludedCwd(entry.projectPath, excludePaths)) continue;
       const project = extractProjectName(entry.projectPath ?? "");
       sessions.push({
         project,
@@ -247,6 +250,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
       const start = q.startTime || info.mtimeMs;
       const end = q.endTime || info.mtimeMs;
       if (start < cutoff) continue; // re-check against real start time
+      if (isExcludedCwd(q.cwd, excludePaths)) continue;
 
       const displayName = q.cwd ? extractProjectName(q.cwd) : projectName;
       sessions.push({

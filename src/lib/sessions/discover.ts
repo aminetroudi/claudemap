@@ -7,7 +7,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PROJECTS_DIR } from "../paths";
-import { isAutomatedSession } from "./classify";
+import { loadConfig } from "../config";
+import { isAutomatedSession, isExcludedCwd } from "./classify";
 import { extractContextUsage } from "./context";
 import { readLastEntries } from "./jsonl";
 import { resolveOrigin } from "./origin";
@@ -264,14 +265,18 @@ export async function discoverSessions(): Promise<LiveSession[]> {
     }
   }
 
-  sessions.sort((a, b) => {
+  // Hard-exclude sessions whose working dir is under a configured excludePath.
+  const { excludePaths } = await loadConfig();
+  const visible = sessions.filter((s) => !isExcludedCwd(s.projectPath, excludePaths));
+
+  visible.sort((a, b) => {
     const pa = statusPriority(a.status);
     const pb = statusPriority(b.status);
     if (pa !== pb) return pa - pb;
     return a.lastActivity < b.lastActivity ? 1 : a.lastActivity > b.lastActivity ? -1 : 0;
   });
 
-  return sessions;
+  return visible;
 }
 
 /**

@@ -7,7 +7,17 @@
 // ~/work, etc. We classify by path; the UI hides these by default but offers
 // a toggle, so a false positive only means one extra click. Server-side only.
 
-import { HOME } from "../paths";
+import { HOME, isUnder } from "../paths";
+
+/**
+ * True when a session's working directory falls under one of the app's
+ * configured excludePaths (the same list that scopes file scanning). These are
+ * hard-excluded from the Sessions views — not merely hidden behind a toggle.
+ */
+export function isExcludedCwd(cwd: string | undefined, excludePaths: string[]): boolean {
+  if (!cwd) return false;
+  return excludePaths.some((ex) => ex && (cwd === ex || isUnder(cwd, ex)));
+}
 
 /** True when the session looks plugin/skill/automation-spawned, not user-initiated. */
 export function isAutomatedSession(opts: { cwd?: string; project?: string }): boolean {
