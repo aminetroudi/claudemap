@@ -101,16 +101,24 @@ export async function listClaudeProcesses(): Promise<ClaudeProcess[]> {
   return [...primary, ...supplement.filter((p) => !seen.has(p.pid))];
 }
 
+const UUID_ARG_RE = /--resume[\s=]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+const ENV_SID_PREFIX = "CLAUDE_CODE_SESSION_ID=";
+const ENV_CHILD = "CLAUDE_CODE_CHILD_SESSION=1";
+
 /**
- * Session ids of all live Claude processes, read from `/proc/<pid>/environ`
- * (`CLAUDE_CODE_SESSION_ID`). A session is "running" iff its id appears here.
+ * Session ids of all live Claude sessions. A session is "running" iff its id
+ * appears here. `claude agents --json` omits the top-level interactive session,
+ * so we read each live `claude` process directly, deriving its session id by:
  *
- * This is the reliable liveness signal: `claude agents --json` omits the
- * top-level interactive session, so pid→log guessing put live pids on stale
- * logs (false "running" → false ghosts). The env var is exact. Child processes
- * (Bash tools, spawned CLIs) inherit it — that's fine: their presence still
- * proves the session's process tree is alive, and the id maps to the parent's
- * log regardless of the child's cwd. Linux-only (no-op elsewhere).
+ *  1. `--resume <uuid>` in the cmdline — AUTHORITATIVE. A process started via
+ *     `claude --resume X` runs session X regardless of inherited env, which a
+ *     spawned/attached session's `CLAUDE_CODE_SESSION_ID` gets wrong (it
+ *     inherits the parent shell's id).
+ *  2. else `CLAUDE_CODE_SESSION_ID` from environ, but only for NON-child
+ *     processes (CLAUDE_CODE_CHILD_SESSION=1 marks tool/subprocess children
+ *     that carry the parent's id, not their own session).
+ *
+ * Skips `claude daemon`. Linux-only (no /proc elsewhere → empty set).
  */
 export async function collectLiveSessionIds(): Promise<Set<string>> {
   const ids = new Set<string>();
@@ -130,18 +138,35 @@ export async function collectLiveSessionIds(): Promise<Set<string>> {
     if (Number.isInteger(pid) && pid > 0) pids.push(pid);
   }
 
-  const PREFIX = "CLAUDE_CODE_SESSION_ID=";
   await Promise.all(
     pids.map(async (pid) => {
-      let data: Buffer;
+      let cmd: string;
       try {
-        data = await fs.readFile(`/proc/${pid}/environ`);
+        cmd = (await fs.readFile(`/proc/${pid}/cmdline`)).toString("utf8").replace(/\0/g, " ");
       } catch {
-        return; // other-user process or already gone
+        return; // gone or other-user
       }
-      for (const entry of data.toString("utf8").split("\0")) {
-        if (entry.startsWith(PREFIX)) {
-          const v = entry.slice(PREFIX.length);
+      if (cmd.includes(" daemon ") || cmd.endsWith(" daemon")) return; // agents daemon, not a session
+
+      // 1. Authoritative: --resume <uuid> in the cmdline.
+      const m = cmd.match(UUID_ARG_RE);
+      if (m) {
+        ids.add(m[1].toLowerCase());
+        return;
+      }
+
+      // 2. Fallback: own session id from environ, non-child only.
+      let env: string;
+      try {
+        env = (await fs.readFile(`/proc/${pid}/environ`)).toString("utf8");
+      } catch {
+        return;
+      }
+      const parts = env.split("\0");
+      if (parts.includes(ENV_CHILD)) return; // inherited id, not this proc's session
+      for (const entry of parts) {
+        if (entry.startsWith(ENV_SID_PREFIX)) {
+          const v = entry.slice(ENV_SID_PREFIX.length);
           if (v) ids.add(v);
           break;
         }
