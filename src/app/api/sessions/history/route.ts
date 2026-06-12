@@ -3,7 +3,7 @@
 // handlers.go:56-132). days defaults to 7, clamped to 1–365.
 
 import { NextResponse } from "next/server";
-import { discoverSessions, filterLiveSessions } from "@/lib/sessions/discover";
+import { discoverSessions } from "@/lib/sessions/discover";
 import { discoverHistory, quickSessionStats } from "@/lib/sessions/history";
 import type { HistorySession } from "@/lib/sessions/types";
 
@@ -26,8 +26,9 @@ export async function GET(req: Request): Promise<Response> {
     const seen = new Set(sessions.map((s) => s.logFile));
     const cutoff = Date.now() - days * DAY_MS;
 
-    // Merge inactive live sessions so they always appear somewhere.
-    const live = filterLiveSessions(await discoverSessions());
+    // Merge inactive sessions from the live scan so they always appear here.
+    // Uses the unfiltered list — filterLiveSessions now strips inactive ones.
+    const live = await discoverSessions();
     for (const s of live) {
       if (s.status !== "inactive") continue;
       const la = Date.parse(s.lastActivity);

@@ -26,8 +26,6 @@ import type { LiveSession, LogEntry } from "./types";
 const RECENT_LOG_WINDOW_MS = 5 * 60 * 1000;
 /** Running process + log activity older than this = ghost (1 h, csm session.go:1080-1110). */
 const GHOST_AGE_MS = 60 * 60 * 1000;
-/** Stopped sessions stay in the live view this long (1 h, csm handlers.go:27-42). */
-const LIVE_RETENTION_MS = 60 * 60 * 1000;
 
 /** Readable project name from the encoded dir name (csm session.go:737-773). Lossy fallback. */
 export function decodeProjectName(name: string): string {
@@ -280,15 +278,11 @@ export async function discoverSessions(): Promise<LiveSession[]> {
 }
 
 /**
- * Live-view filter (csm filterLiveSessions, handlers.go:31-42): every
- * non-inactive session, plus inactive ones with activity inside the
- * 1-hour retention window.
+ * Live-view filter: only currently-active sessions (working / needs_input /
+ * waiting). Inactive sessions belong in History, not the live view — they are
+ * still surfaced there (DiscoverHistory + the history route's inactive merge),
+ * so dropping them here loses nothing.
  */
 export function filterLiveSessions(all: LiveSession[]): LiveSession[] {
-  const cutoff = Date.now() - LIVE_RETENTION_MS;
-  return all.filter((s) => {
-    if (s.status !== "inactive") return true;
-    const t = Date.parse(s.lastActivity);
-    return !Number.isNaN(t) && t > cutoff;
-  });
+  return all.filter((s) => s.status !== "inactive");
 }
