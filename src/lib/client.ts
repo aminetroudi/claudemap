@@ -1,5 +1,10 @@
 import type { AnyItem, AppConfig, McpResult, ScanResult } from "./types";
-import type { SessionsResult } from "./sessions/types";
+import type {
+  HistoryResult,
+  SessionMetrics,
+  SessionsResult,
+  TimelineResult,
+} from "./sessions/types";
 
 export async function fetchItems(): Promise<ScanResult> {
   const r = await fetch("/api/items", { cache: "no-store" });
@@ -33,6 +38,24 @@ export async function fetchMcp(): Promise<McpResult> {
 
 export async function fetchSessions(): Promise<SessionsResult> {
   const r = await fetch("/api/sessions", { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchHistory(days = 7): Promise<HistoryResult> {
+  const r = await fetch(`/api/sessions/history?days=${days}`, { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchTimeline(file: string, offset = 0, limit = 50): Promise<TimelineResult> {
+  const q = new URLSearchParams({ file, offset: String(offset), limit: String(limit) });
+  const r = await fetch(`/api/sessions/timeline?${q}`, { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchMetrics(file: string): Promise<SessionMetrics> {
+  const r = await fetch(`/api/sessions/metrics?file=${encodeURIComponent(file)}`, {
+    cache: "no-store",
+  });
   return r.json();
 }
 

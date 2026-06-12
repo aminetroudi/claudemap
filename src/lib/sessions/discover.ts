@@ -28,7 +28,7 @@ const GHOST_AGE_MS = 60 * 60 * 1000;
 const LIVE_RETENTION_MS = 60 * 60 * 1000;
 
 /** Readable project name from the encoded dir name (csm session.go:737-773). Lossy fallback. */
-function decodeProjectName(name: string): string {
+export function decodeProjectName(name: string): string {
   name = name.replace(/^-/, "");
 
   const idx = name.indexOf("-Projects-");

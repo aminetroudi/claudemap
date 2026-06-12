@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, GitBranch, Wifi, WifiOff } from "lucide-react";
+import { Activity, BarChart3, GitBranch, History, Radio, Wifi, WifiOff } from "lucide-react";
 import { fetchSessions } from "@/lib/client";
 import { contextWindowForModel, EXTENDED_CONTEXT_WINDOW } from "@/lib/sessions/context";
 import type { LiveSession, SessionStatus } from "@/lib/sessions/types";
+import HistoryView from "./sessions/HistoryView";
+import SessionDrawer from "./sessions/SessionDrawer";
+import { formatTokens, relativeTime } from "./sessions/format";
 
 const STATUS_META: Record<SessionStatus, { dot: string; label: string; color: string }> = {
   working: { dot: "●", label: "Working", color: "var(--green)" },
@@ -13,36 +16,72 @@ const STATUS_META: Record<SessionStatus, { dot: string; label: string; color: st
   inactive: { dot: "◌", label: "Inactive", color: "var(--tx-3)" },
 };
 
-/** Summary header counts the three active states (csm web header). */
 const SUMMARY_ORDER: SessionStatus[] = ["working", "needs_input", "waiting"];
 
+type Tab = "live" | "history" | "usage";
 type ConnState = "connecting" | "live" | "reconnecting";
+type OpenFn = (file: string, label: string) => void;
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - Date.parse(iso);
-  if (Number.isNaN(ms)) return "—";
-  if (ms < 0) return "now";
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
-function formatTokens(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1_000_000).toFixed(1)}M`;
-}
+const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
+  { id: "live", label: "Live", icon: <Radio size={15} /> },
+  { id: "history", label: "History", icon: <History size={15} /> },
+  { id: "usage", label: "Usage", icon: <BarChart3 size={15} /> },
+];
 
 // ── SessionsPanel ─────────────────────────────────────────────────
-// Live by SSE: subscribes to /api/sessions/events, which the hub pushes every
-// ~2 s. On SSE failure it falls back to a one-shot fetch and reconnects with
-// capped backoff. Session data is volatile, so the panel owns its own data
-// rather than going through page.tsx load().
+// Tabbed shell (Live / History / Usage, mirroring csm's h/l/u). The Live tab
+// streams from /api/sessions/events; History fetches on demand. Either tab can
+// open the detail drawer (metrics + paginated timeline).
 export default function SessionsPanel() {
+  const [tab, setTab] = useState<Tab>("live");
+  const [drawer, setDrawer] = useState<{ file: string; label: string } | null>(null);
+  const openDetail: OpenFn = useCallback((file, label) => setDrawer({ file, label }), []);
+
+  return (
+    <div style={{ display: "grid", gap: 18 }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--line)", paddingBottom: 2 }}>
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className="btn"
+            onClick={() => setTab(t.id)}
+            style={{
+              border: "none",
+              borderRadius: 0,
+              borderBottom: tab === t.id ? "2px solid var(--ac)" : "2px solid transparent",
+              color: tab === t.id ? "var(--tx-1)" : "var(--tx-3)",
+              background: "none",
+            }}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "live" && <LiveView onOpen={openDetail} />}
+      {tab === "history" && <HistoryView onOpen={openDetail} />}
+      {tab === "usage" && <UsagePlaceholder />}
+
+      {drawer && (
+        <SessionDrawer file={drawer.file} title={drawer.label} onClose={() => setDrawer(null)} />
+      )}
+    </div>
+  );
+}
+
+function UsagePlaceholder() {
+  return (
+    <div className="card" style={{ padding: 40, textAlign: "center" }}>
+      <BarChart3 size={28} style={{ color: "var(--tx-3)", margin: "0 auto 12px" }} />
+      <div style={{ color: "var(--tx-2)" }}>Usage view arrives in the next phase.</div>
+    </div>
+  );
+}
+
+// ── Live view (SSE) ───────────────────────────────────────────────
+function LiveView({ onOpen }: { onOpen: OpenFn }) {
   const [sessions, setSessions] = useState<LiveSession[] | null>(null);
   const [conn, setConn] = useState<ConnState>("connecting");
   const [errMsg, setErrMsg] = useState<string | null>(null);
@@ -52,7 +91,6 @@ export default function SessionsPanel() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closedRef = useRef(false);
 
-  // One-shot fallback fetch, used when SSE errors before any frame arrives.
   const fallbackFetch = useCallback(async () => {
     try {
       const r = await fetchSessions();
@@ -74,24 +112,21 @@ export default function SessionsPanel() {
       esRef.current = es;
 
       es.addEventListener("sessions", (ev) => {
-        retryRef.current = 0; // a real frame proves the link is healthy
+        retryRef.current = 0;
         setConn("live");
         setErrMsg(null);
         try {
           const data = JSON.parse((ev as MessageEvent).data) as { sessions: LiveSession[] };
           setSessions(data.sessions ?? []);
         } catch {
-          // ignore a malformed frame; the next tick replaces it
+          // a malformed frame is replaced by the next tick
         }
       });
-
-      // heartbeat events are intentionally ignored — they only keep the link warm.
 
       es.onerror = () => {
         es.close();
         if (closedRef.current) return;
         setConn("reconnecting");
-        // Keep data fresh while the stream is down, then retry with backoff.
         void fallbackFetch();
         const delay = Math.min(1000 * 2 ** retryRef.current, 15_000);
         retryRef.current += 1;
@@ -100,7 +135,6 @@ export default function SessionsPanel() {
     };
 
     connect();
-
     return () => {
       closedRef.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
@@ -118,7 +152,6 @@ export default function SessionsPanel() {
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      {/* Header: live status summary + connection indicator */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center", fontSize: "var(--t-md)" }}>
           {sessions === null ? (
@@ -168,7 +201,7 @@ export default function SessionsPanel() {
             </thead>
             <tbody>
               {list.map((s) => (
-                <SessionRow key={s.logFile} session={s} />
+                <SessionRow key={s.logFile} session={s} onOpen={onOpen} />
               ))}
             </tbody>
           </table>
@@ -201,9 +234,6 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Context-usage bar: green <76 %, amber 76–90 %, red ≥91 %; width clamps at
- * 100 % while the label keeps the raw percent (it can exceed 100 % near a
- * compaction). ` (1M)` marks an extended-window model. */
 function ContextBar({ percent, tokens, model }: { percent?: number; tokens?: number; model?: string }) {
   if (percent == null || !tokens) return <span className="faint">—</span>;
   const color = percent >= 91 ? "var(--red)" : percent >= 76 ? "var(--amber)" : "var(--green)";
@@ -224,12 +254,15 @@ function ContextBar({ percent, tokens, model }: { percent?: number; tokens?: num
   );
 }
 
-function SessionRow({ session: s }: { session: LiveSession }) {
+function SessionRow({ session: s, onOpen }: { session: LiveSession; onOpen: OpenFn }) {
   const meta = STATUS_META[s.status] ?? STATUS_META.inactive;
   const detail = s.task !== "-" && s.task ? s.task : s.lastMessage ?? "—";
 
   return (
-    <tr style={{ borderBottom: "1px solid var(--line)" }}>
+    <tr
+      style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }}
+      onClick={() => onOpen(s.logFile, s.project)}
+    >
       <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
         <span style={{ color: meta.color, marginRight: 7 }}>{meta.dot}</span>
         <span style={{ color: meta.color }}>{meta.label}</span>

@@ -38,6 +38,71 @@ export interface SessionsResult {
   error?: string;
 }
 
+// ── History + detail (timeline/metrics) wire shapes ──────────────────
+// Port of csm HistorySession (history.go:14-24), TimelineEntry/Content and
+// SessionMetrics (timeline.go:13-49). Durations are MILLISECONDS, not Go ns.
+
+export interface HistorySession {
+  project: string;
+  gitBranch?: string;
+  startTime: string; // ISO
+  endTime: string; // ISO
+  durationMs: number;
+  messageCount: number;
+  firstPrompt: string;
+  lastMessage?: string;
+  logFile: string;
+}
+
+export interface HistoryResult {
+  sessions: HistorySession[];
+  error?: string;
+}
+
+export interface TimelineContent {
+  type: string; // text | tool_use | tool_result | …
+  text?: string;
+  tool?: string; // tool name for tool_use
+  input?: string; // stringified JSON for tool_use input
+}
+
+export interface TimelineEntry {
+  timestamp: string; // ISO ("" when the source line had none)
+  type: string; // user | assistant | system | summary
+  subtype?: string;
+  model?: string;
+  content?: TimelineContent[];
+  usage?: Usage;
+  summary?: string;
+  gitBranch?: string;
+}
+
+export interface TimelineResult {
+  entries: TimelineEntry[];
+  total: number;
+  offset: number;
+  limit: number;
+  error?: string;
+}
+
+export interface SessionMetrics {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheCreationTokens: number;
+  totalCacheReadTokens: number;
+  toolUsageCounts: Record<string, number>;
+  userPromptCount: number;
+  toolResultCount: number;
+  assistantMessageCount: number;
+  turnCount: number;
+  compactCount: number;
+  contextPercent: number;
+  contextTokens: number;
+  firstTimestamp: string | null; // ISO
+  lastTimestamp: string | null; // ISO
+  error?: string;
+}
+
 // ── JSONL log entry shapes (internal, parsed from ~/.claude/projects logs) ──
 
 /** Token usage — only the 4 top-level fields; the real payload is a superset. */
