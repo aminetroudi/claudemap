@@ -9,6 +9,7 @@ import path from "node:path";
 import { PROJECTS_DIR } from "../paths";
 import { extractContextUsage } from "./context";
 import { readLastEntries } from "./jsonl";
+import { resolveOrigin } from "./origin";
 import { listClaudeProcesses, type ClaudeProcess } from "./process";
 import {
   detectUnsandboxedCommands,
@@ -179,6 +180,11 @@ async function parseSession(
 
   const context = extractContextUsage(entries);
 
+  // Origin: cache first; /proc detection only while the process is running
+  // (csm read-through rule, session.go:527-534). Never walks /proc for
+  // non-running sessions — resolveOrigin is cache-only without a pid.
+  const origin = await resolveOrigin(sessionId, proc?.pid);
+
   const session: LiveSession = {
     sessionId,
     project: cwd ? extractProjectName(cwd) : decodeProjectName(encodedName),
@@ -191,6 +197,7 @@ async function parseSession(
     sessionTitle: sessionTitle || undefined,
     lastActivity: new Date(lastActivityMs).toISOString(),
     gitBranch: extractGitBranch(entries) || undefined,
+    origin: origin ?? undefined,
     pid: proc?.pid,
     kind: proc?.kind,
     attachId: proc?.attachId,

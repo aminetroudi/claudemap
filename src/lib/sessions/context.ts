@@ -11,30 +11,36 @@ export const EXTENDED_CONTEXT_WINDOW = 1_000_000;
 
 /**
  * Model families with extended (1M) windows, keyed by family, valued with the
- * first generation that ships it. New families (e.g. "fable") are one-line
- * additions here.
+ * first generation that ships it. New families are one-line additions here.
+ * "fable" is a 1M-window tier (verified live: a claude-fable-5 session held
+ * 510K context tokens, impossible on a 200K window).
  */
 export const EXTENDED_WINDOW_FAMILIES: Record<string, { major: number; minor: number }> = {
   opus: { major: 4, minor: 6 },
   sonnet: { major: 4, minor: 6 },
+  fable: { major: 5, minor: 0 },
 };
 
 /**
  * Extract family + generation from ids of the form
- * "claude-<family>-<major>-<minor>[-suffix]". Returns null for anything else
- * — including "<synthetic>" and empty strings — so callers fall back to the
- * safe default.
+ * "claude-<family>-<major>[-<minor>][-suffix]". Real ids may omit the minor
+ * version entirely (e.g. "claude-fable-5"), which parses as minor 0. Returns
+ * null for anything else — including "<synthetic>" and empty strings — so
+ * callers fall back to the safe default.
  */
 function parseClaudeModel(model: string): { family: string; major: number; minor: number } | null {
   const prefix = "claude-";
   if (!model.startsWith(prefix)) return null;
   const parts = model.slice(prefix.length).split("-");
-  if (parts.length < 3) return null;
-  if (!/^-?\d+$/.test(parts[1]) || !/^-?\d+$/.test(parts[2])) return null;
+  if (parts.length < 2) return null;
+  if (!/^-?\d+$/.test(parts[1])) return null;
+  // Minor is optional: "claude-fable-5" → 5.0; non-numeric third parts
+  // (date suffixes never appear there — they follow the minor) mean 0 too.
+  const minor = parts.length >= 3 && /^-?\d+$/.test(parts[2]) ? Number.parseInt(parts[2], 10) : 0;
   return {
     family: parts[0],
     major: Number.parseInt(parts[1], 10),
-    minor: Number.parseInt(parts[2], 10),
+    minor,
   };
 }
 
