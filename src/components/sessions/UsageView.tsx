@@ -144,7 +144,8 @@ export default function UsageView() {
         {local.sessions.length === 0 ? (
           <div className="faint" style={{ fontSize: "var(--t-md)" }}>No token usage in the last 5 hours.</div>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--t-md)" }}>
+          <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: "var(--t-md)" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
                 <th style={{ textAlign: "left", padding: "8px 10px", fontSize: "var(--t-sm)", color: "var(--tx-3)", fontWeight: 600 }}>Project</th>
@@ -166,6 +167,7 @@ export default function UsageView() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

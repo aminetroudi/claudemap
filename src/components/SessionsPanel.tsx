@@ -250,7 +250,7 @@ function LiveView({
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", gap: 18, alignItems: "center", fontSize: "var(--t-md)" }}>
+        <div style={{ display: "flex", gap: 18, alignItems: "center", fontSize: "var(--t-md)", flexWrap: "wrap" }}>
           {sessions === null ? (
             <span style={{ color: "var(--tx-3)" }}>Scanning sessions…</span>
           ) : (
@@ -295,8 +295,8 @@ function LiveView({
       )}
 
       {list.length > 0 && (
-        <div className="card" style={{ overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--t-md)" }}>
+        <div className="card" style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: "var(--t-md)" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
                 <Th>Status</Th>

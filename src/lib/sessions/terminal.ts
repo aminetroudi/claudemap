@@ -22,8 +22,13 @@ const execFileP = promisify(execFile);
 const ATTACH_ID_RE = /^[0-9a-f]{8}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-/** Preference order; spawn resolves each via PATH (csm targets none of these). */
-const CANDIDATES = ["x-terminal-emulator", "gnome-terminal", "tilix"];
+// Preference order; spawn resolves each via PATH (csm targets none of these).
+// gnome-terminal and tilix are tried before x-terminal-emulator because the
+// latter is an `alternatives` symlink that, on Debian/Ubuntu, points at
+// gnome-terminal.wrapper — a legacy shim that silently DROPS --working-directory
+// and mangles `-- bash -c`, so the terminal opens in the server's cwd and our
+// command never runs. The real binaries honor both correctly.
+const CANDIDATES = ["gnome-terminal", "tilix", "x-terminal-emulator"];
 
 export type TerminalMode = "attach" | "resume" | "shell";
 
@@ -92,26 +97,33 @@ export async function spawnSessionTerminal(
     throw new Error("invalid mode");
   }
   // `exec bash` keeps the window open after claude exits / detaches.
-  const script = claudeCmd ? `${claudeCmd}; exec bash` : "exec bash";
+  const inner = claudeCmd ? `${claudeCmd}; exec bash` : "exec bash";
+  // cd "$1" guarantees the working directory even when an emulator ignores
+  // --working-directory. $1 is passed positionally (argv), so a cwd containing
+  // spaces or special characters needs no escaping and cannot inject anything.
+  const script = `cd "$1" 2>/dev/null; ${inner}`;
   const title = `claudemap: ${mode}`;
 
   const emulator = await pickEmulator();
   if (!emulator) {
-    throw new Error("no supported terminal emulator found (x-terminal-emulator, gnome-terminal, tilix)");
+    throw new Error("no supported terminal emulator found (gnome-terminal, tilix, x-terminal-emulator)");
   }
 
   let args: string[];
   if (emulator === "tilix") {
-    // tilix word-splits -e with shell rules; the double-quotes group the script,
-    // which is safe because `script` contains only validated tokens + literals.
-    args = ["-w", cwd, "-e", `bash -c "${script}"`];
+    // tilix honors -w reliably; its -e takes a single shell-parsed command.
+    // `inner` holds only validated tokens + literals (no cwd), so quoting is safe.
+    args = ["-w", cwd, "-e", `bash -c "${inner}"`];
   } else {
     // gnome-terminal / x-terminal-emulator: everything after `--` is exec'd
-    // directly (no shell), and `script` is a single argv element to `bash -c`.
-    args = ["--title", title, "--working-directory", cwd, "--", "bash", "-c", script];
+    // directly (no shell). cwd is passed BOTH via --working-directory and
+    // positionally to `bash -c <script> bash <cwd>` (→ $1) for the cd guard.
+    args = ["--title", title, "--working-directory", cwd, "--", "bash", "-c", script, "bash", cwd];
   }
 
-  const child = spawn(emulator, args, { detached: true, stdio: "ignore" });
+  // Also set the child's own cwd so emulators that spawn their shell directly
+  // (rather than via a session server) inherit the right directory too.
+  const child = spawn(emulator, args, { cwd, detached: true, stdio: "ignore" });
   child.unref(); // survive the server process
 
   return { ok: true, emulator, mode };
