@@ -33,7 +33,8 @@ case "${1:-start}" in
     fi
     [ -d .next ] || { echo "no build found — building…"; "$BUN" run build; }
     # setsid → new session, so it is NOT killed when this shell exits.
-    setsid bash -c "PORT=$PORT exec '$BUN' run start" </dev/null >"$LOG" 2>&1 &
+    # Bind 127.0.0.1 only: this dashboard has no auth, never expose it on a LAN.
+    setsid bash -c "exec '$BUN' run start --hostname 127.0.0.1 --port $PORT" </dev/null >"$LOG" 2>&1 &
     disown || true
     for _ in $(seq 1 40); do
       curl -sf -o /dev/null "http://localhost:$PORT/" && break

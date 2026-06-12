@@ -1,64 +1,55 @@
 # claudemap
 
-**A Claude Code plugin** that boots a local web dashboard for your whole `~/.claude/` — skills, agents, plugins, MCP servers, memory, marketplaces, and project-scoped config.
+A **local web dashboard** for your whole `~/.claude/` — skills, agents, plugins, MCP servers, memory, marketplaces, project-scoped config, and **live Claude Code sessions**.
 
-The plugin runs a Next.js app in the background. Open `http://127.0.0.1:3737` in your browser; browse, toggle, edit, promote/demote, install, uninstall — without hunting through scattered JSON and Markdown files.
+It runs a Next.js app on `http://127.0.0.1:3737`. Browse, toggle, edit, promote/demote, install, uninstall, watch running sessions — without hunting through scattered JSON and Markdown.
 
 ![Overview](./public/screenshots/overview.png)
 
+> Not a Claude Code plugin. It's a plain local server you start yourself and leave running — a host-introspection tool that needs real filesystem, process, and (for the Sessions terminal buttons) GUI access, none of which fit the plugin/container model.
+
 ---
 
-## Install
-
-### As a Claude Code plugin (recommended)
-
-```text
-/plugin marketplace add protoxy/claudemap
-/plugin install claudemap@claudemap
-```
-
-On first install, the `Setup` hook runs `bun install` + `bun run build` inside the plugin's cache dir (one-time, ~1–2 min). Subsequent sessions just boot the server. Open `http://127.0.0.1:3737`.
-
-In any Claude Code session, `/claudemap` verifies the server is up and surfaces the URL.
-
-### From source (dev)
+## Quick start
 
 ```bash
 git clone https://github.com/protoxy/claudemap
 cd claudemap
 bun install
-bun run dev       # hot-reload dev server on :3000
-# or
-bun run build && bun run start    # prod server on :3000
+./claudemap.sh start      # builds on first run, then serves detached on :3737
+```
+
+Open `http://127.0.0.1:3737`. The server is **detached** — it keeps running after you close the terminal that launched it.
+
+For development with hot reload:
+
+```bash
+bun run dev               # :3000, hot reload
 ```
 
 ---
 
 ## Running & stopping
 
-Once installed, the plugin spawns a **detached Next.js server** on every `SessionStart` (startup / clear / compact). The process survives your Claude Code session — if you close Claude Code, the dashboard keeps running. The server is idempotent: subsequent SessionStarts ping the port and skip spawning if it's already up.
+`claudemap.sh` manages a detached production server (bound to `127.0.0.1` only):
 
-**Stop it:**
 ```bash
-kill "$(cat ~/.claudemap/server.pid)"
+./claudemap.sh start      # build if needed, start detached
+./claudemap.sh stop
+./claudemap.sh restart
+./claudemap.sh status
+./claudemap.sh logs       # tail ~/.claudemap.log
 ```
 
-**Confirm it's down:**
-```bash
-curl -sf http://127.0.0.1:3737/ -o /dev/null -w "HTTP %{http_code}\n"
+Override the port: `PORT=4000 ./claudemap.sh start`.
+
+It survives the shell that launched it, but **not a reboot**. To start it at login, add a cron line:
+
+```cron
+@reboot cd $HOME/workspace/claudemap && ./claudemap.sh start
 ```
 
-**Disable auto-boot without uninstalling:** `/plugin disable claudemap@claudemap`.
-
-Your dashboard data (skills, plugins, settings, etc.) is read live from `~/.claude/` via `$HOME` — it is **not** stored inside the plugin cache. Reinstalling or deleting the plugin never touches your Claude setup.
-
----
-
-## Requirements
-
-- **[bun](https://bun.sh)** ≥ 1.1 (or `pnpm` / `npm` — auto-detected by `scripts/smart-install.mjs`)
-- **Claude Code** installed locally (`~/.claude/` must exist)
-- Linux, macOS, or WSL2 on Windows (native Windows shells are not supported)
+Your data (skills, plugins, settings, sessions) is read live from `~/.claude/` via `$HOME` — nothing is copied or cached elsewhere.
 
 ---
 
@@ -67,12 +58,13 @@ Your dashboard data (skills, plugins, settings, etc.) is read live from `~/.clau
 | Section       | What you see                                                                 |
 | ------------- | ---------------------------------------------------------------------------- |
 | Overview      | Stat grid + recent changes across your whole Claude setup                    |
+| **Sessions**  | **Live Claude Code sessions, history, and usage** (see below)                |
 | Skills        | All skills (global + project), view/edit `SKILL.md`, promote/demote          |
 | Plugins       | Installed plugins, enable/disable, uninstall                                 |
 | Agents        | Agent definitions, scope (global vs project), edit frontmatter               |
 | Memory        | Memory files indexed via `MEMORY.md`, view/edit                              |
 | CLAUDE.md     | All `CLAUDE.md` files found under scanned paths                              |
-| Loose `.md`   | Stray Markdown files that might belong as a skill/agent/memory               |
+| Loose `.md`   | Stray Markdown that might belong as a skill/agent/memory                     |
 | Projects      | Projects discovered in `~/.claude/projects/`                                 |
 | MCP Servers   | Local (`~/.claude.json`, `~/.mcp.json`, per-project) + cloud MCP — add/edit/delete |
 | Marketplace   | Browse and install plugins from configured marketplaces                      |
@@ -82,61 +74,59 @@ Plus a `⌘K` command palette for quick navigation and item search.
 
 ---
 
-## Configuration
+## Sessions
 
-| Env var            | Default     | What it does                                      |
-| ------------------ | ----------- | ------------------------------------------------- |
-| `CLAUDEMAP_HOST`   | `127.0.0.1` | Host the Next.js server binds to                  |
-| `CLAUDEMAP_PORT`   | `3737`      | Port the dashboard listens on                     |
+A live monitor for your Claude Code sessions, parsed from `~/.claude/projects/*/*.jsonl` and the `claude agents` process list. Three tabs:
 
-State is written to `~/.claudemap/`:
+- **Live** — currently-active sessions (working / needs input / waiting), updated every ~2 s over SSE. Per row: status, project, **context-window bar** (with `(1M)` for extended-window models), origin (terminal/IDE — incl. **Tilix**, which upstream tooling misses), git branch, last activity, and the current task. Inactive sessions drop to History.
+- **History** — past sessions within a day window, grouped Today / Yesterday / date, filterable by project or first prompt.
+- **Usage** — local token usage over a rolling 5-hour window per session, plus your **API quota** (5-hour / 7-day utilization bars with reset countdowns) and Claude service status.
 
-| File                    | Purpose                         |
-| ----------------------- | ------------------------------- |
-| `~/.claudemap/server.pid` | Detached server PID (written on boot) |
-| `~/.claudemap/server.log` | Server + `smart-install` logs   |
+Click any row for a **detail drawer**: token/turn/tool metrics and a paginated, filterable message timeline.
+
+**Actions** (per row):
+
+- **Attach** — for background agents: opens a terminal running `claude attach <id>` (detach with `Ctrl+Z`, the agent keeps running).
+- **Terminal here** — for running interactive sessions: opens a new shell in the session's directory.
+- **Resume** — for past sessions: opens `claude --resume <uuid>`.
+- **Kill ghosts** — SIGTERM processes that are alive but idle > 1 h (re-verified against `ps comm` to avoid PID reuse).
+
+**Noise control:**
+
+- Plugin/skill/hook-spawned sessions (e.g. claude-mem observers) are **hidden by default** — toggle "Show plugin sessions".
+- Sessions whose working directory is under a configured **excludePath** (Settings) are filtered out entirely.
 
 ---
 
-## Troubleshooting
+## Configuration
 
-**Dashboard not reachable**
-```bash
-tail -n 50 ~/.claudemap/server.log
-curl -sf http://127.0.0.1:3737/ -o /dev/null -w "HTTP %{http_code}\n"
-```
+| Env var  | Default | What it does                       |
+| -------- | ------- | ---------------------------------- |
+| `PORT`   | `3737`  | Port the dashboard listens on      |
 
-**Force a clean rebuild**
-```bash
-_R=$(ls -dt ~/.claude/plugins/cache/*/claudemap/[0-9]*/ | head -1)
-rm -rf "$_R/.next" "$_R/node_modules"
-node "$_R/scripts/smart-install.mjs"
-```
-
-**Uninstall**
-```text
-/plugin uninstall claudemap@claudemap
-```
-Then optionally `rm -rf ~/.claudemap`.
+`claudemap.sh` logs to `~/.claudemap.log`. The dashboard's own config (scan paths, excludePaths) lives at `~/.claude/claude-dashboard.config.json` and is editable from the Settings tab.
 
 ---
 
 ## Security
 
-This is a **local power-user tool**, not a hosted service. It reads and writes files under `~/.claude/` and any directories you scan.
+This is a **local power-user tool**, not a hosted service. It reads and writes files under `~/.claude/`, spawns terminals, and can signal processes.
 
-- Server binds to `127.0.0.1` by default. **Do not expose the port** — there is no auth.
-- The Docker compose setup mounts your entire host `$HOME` into the container and binds the dev server to `0.0.0.0`. On an untrusted network, close the port at the firewall or edit `Dockerfile.dev` to bind `-H 127.0.0.1`.
-- API routes enforce a **same-origin check** on mutating requests (`src/middleware.ts`). A malicious page cannot silently POST/PUT/DELETE to the local API. This mitigates simple CSRF but is not a substitute for auth.
-- Trash actions move files to the OS trash (reversible), but back up `~/.claude/` before bulk operations.
+- The server binds to **`127.0.0.1` only** (`claudemap.sh`). It has no auth — **never expose the port**.
+- Mutating API routes enforce a **same-origin check** (`src/middleware.ts`): a malicious page can't silently POST/PUT/DELETE to the local API.
+- The session **timeline/metrics** endpoints resolve symlinks and require the target under `~/.claude/projects/` ending in `.jsonl` — no arbitrary file read.
+- Terminal spawning uses **argv arrays only** with strict regex-validated tokens (attach id, session UUID) and a cwd that must resolve under `$HOME` — no shell-string interpolation.
+- Ghost kill is **SIGTERM only**, after re-verifying the PID still maps to a `claude` process.
+- Your **OAuth token** (read for the quota view) never leaves the server — responses carry utilization percentages only, never the token.
+- Trash actions move files to a reversible trash, but back up `~/.claude/` before bulk operations.
 
-> **Do not run this on a shared machine, jumphost, or production server.** Run it where you develop, stop it when you're done.
+> Run it where you develop, not on a shared machine, jumphost, or production server.
 
 ---
 
 ## Demo mode (for screenshots / evaluation)
 
-The repo ships a curated fixture `$HOME` at `fixtures/demo-home/` — fake skills, agents, plugins, MCP servers, memory entries. Boot a separate dashboard against it without exposing your real `~/.claude/`:
+The repo ships a curated fixture `$HOME` at `fixtures/demo-home/` — fake skills, agents, plugins, MCP servers, memory entries. Boot a separate dashboard against it without touching your real `~/.claude/`:
 
 ```bash
 bun install && bun run build       # one-time
@@ -144,35 +134,8 @@ node scripts/demo-run.mjs          # http://127.0.0.1:3738
 ```
 
 - Demo `$HOME` is assembled at `/tmp/claudemap-demo/` — override with `CLAUDEMAP_DEMO_HOME`.
-- Port defaults to `3738` (avoids colliding with the plugin's `:3737`) — override with `CLAUDEMAP_PORT`.
-- Reseed from the fixture (after editing files via the UI) with `CLAUDEMAP_DEMO_RESEED=1 node scripts/demo-run.mjs`.
+- Reseed (after editing via the UI) with `CLAUDEMAP_DEMO_RESEED=1 node scripts/demo-run.mjs`.
 - Stop with Ctrl+C. Nothing persists outside `/tmp/claudemap-demo/`.
-
-Use this for README screenshots, recorded demos, or trying the app without a real Claude Code setup.
-
----
-
-## Screenshots
-
-### Overview — constellation mode
-
-![Constellation](./public/screenshots/overview-constallation.png)
-
-### Skills
-
-![Skills](./public/screenshots/skills.png)
-
-### MCP servers
-
-![MCP](./public/screenshots/mcp.png)
-
-### Marketplace
-
-![Marketplace](./public/screenshots/marketplace.png)
-
-### Settings
-
-![Settings](./public/screenshots/settings.png)
 
 ---
 
@@ -189,30 +152,28 @@ Use this for README screenshots, recorded demos, or trying the app without a rea
 ## Project layout
 
 ```
-.claude-plugin/
-  plugin.json             # plugin manifest
-  marketplace.json        # single-plugin marketplace so the repo can be added directly
-hooks/
-  hooks.json              # Setup (build) + SessionStart (boot) hooks
-skills/
-  claudemap/SKILL.md      # /claudemap — surface URL, verify reachability
+claudemap.sh              # detached local runner (start/stop/restart/status/logs)
 scripts/
-  smart-install.mjs       # install deps + build on first run (idempotent)
-  boot-server.mjs         # spawn `next start` detached, health-check, write pid
+  demo-run.mjs            # boot the dashboard against the demo fixture
   gen-icons.mjs           # PWA icon generation
 src/
   app/
-    api/                  # REST handlers (items, mcp, file, actions, config, projects, marketplaces, search)
+    api/                  # REST handlers (items, mcp, file, actions, config,
+                          #   projects, marketplaces, search, sessions/*)
     layout.tsx            # root layout, next/font, metadata
     page.tsx              # single-page shell
-  components/             # Sidebar, Viewer, ItemRow, OverviewPanel, McpPanel, MarketplacePanel, SettingsPanel, ProjectsPanel, CommandPalette, Skeleton, LocalEnvIndicator
+  components/             # Sidebar, Viewer, panels, CommandPalette, …
+    sessions/             # SessionsPanel deps: HistoryView, SessionDrawer,
+                          #   UsageView, format helpers
   lib/
     paths.ts              # derives all ~/.claude file locations from $HOME
-    config.ts             # dashboard's own config file (~/.claude/claude-dashboard.config.json)
-    actions.ts            # trash/promote/demote/install/uninstall/toggle/read/write
+    config.ts             # dashboard's own config (scan paths, excludePaths)
+    actions.ts            # trash/promote/demote/install/uninstall/read/write
     client.ts             # typed fetch wrappers for /api/*
-    scanners/             # per-kind scanners (skills, agents, plugins, mcp, projects, memory, markdown)
-    types.ts, util.ts, theme.ts
+    scanners/             # per-kind scanners (skills, agents, plugins, mcp, …)
+    sessions/             # session monitor: discover, jsonl, status, context,
+                          #   origin, history, timeline, usage, quota, ghosts,
+                          #   terminal, classify, pathguard, hub
   middleware.ts           # same-origin CSRF hardening
 public/
   icon-192.png, icon-512.png, manifest.json
@@ -227,7 +188,8 @@ All derived from `$HOME` in `src/lib/paths.ts`:
 | Path                                          | Purpose                                      |
 | --------------------------------------------- | -------------------------------------------- |
 | `~/.claude/`                                  | Skills, agents, plugins, marketplaces, settings, projects |
-| `~/.claude/projects/<key>/memory/MEMORY.md`   | Memory index for your home project           |
+| `~/.claude/projects/<key>/*.jsonl`            | Session logs (Sessions monitor)              |
+| `~/.claude/.credentials.json`                 | OAuth token (read server-side for quota; never returned) |
 | `~/.claude/claude-dashboard.config.json`      | This app's own config (scan paths, excludes) |
 | `~/.claude.json`                              | Claude's main config (includes `mcpServers`) |
 | `~/.mcp.json`                                 | Host-level MCP servers                       |
@@ -239,47 +201,14 @@ All derived from `$HOME` in `src/lib/paths.ts`:
 ```bash
 bun run dev     # dev server (hot reload) on :3000
 bun run build   # production build
-bun run start   # serve production build on :3000
+bun run start   # serve production build (use ./claudemap.sh for detached + localhost bind)
 ```
-
-The plugin itself uses `scripts/boot-server.mjs` which runs `next start` on `:3737` — this is independent of `bun run start`.
-
----
-
-## Docker Compose (alternative to the plugin)
-
-Runs the dev server in a container. Mounts your host `$HOME` into the container at the same absolute path so paths stored in `~/.claude/` resolve identically inside and out.
-
-```bash
-docker compose up
-```
-
-Open [http://localhost:3000](http://localhost:3000). Source is bind-mounted; `node_modules` and `.next` live in named volumes.
-
-```bash
-docker compose down      # stop
-docker compose down -v   # stop + drop volumes
-```
-
-**Windows:** run from WSL2. `~/.claude` lives at `/home/<user>/.claude` inside WSL, and the bind mount needs a POSIX `$HOME`. Native PowerShell/cmd won't work.
 
 ---
 
 ## Conventions
 
-See `AGENTS.md`. This repo targets **Next.js 16** with breaking changes vs. older versions. If you're contributing and something feels off, consult `node_modules/next/dist/docs/` before assuming your memory of Next is correct.
-
----
-
-## Contributing
-
-PRs welcome, especially for:
-- Additional scanners (settings lint, hook inspector, model presets)
-- Light-mode polish
-- MCP server exposing scanner output to in-session Claude
-- Proper auth layer for multi-user deployments
-
-Issues are handled best-effort — this is a side project, not a product.
+See `AGENTS.md`. This repo targets **Next.js 16** with breaking changes vs. older versions. If something feels off while contributing, consult `node_modules/next/dist/docs/` before assuming your memory of Next is correct.
 
 ---
 
