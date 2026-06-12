@@ -28,6 +28,7 @@ export interface QuickStats {
   firstPrompt: string;
   cwd: string;
   customTitle: string;
+  aiTitle: string;
 }
 
 /** Extract a JSON string value by fast substring match (history.go:305-316). */
@@ -104,6 +105,7 @@ export async function quickSessionStats(logFile: string): Promise<QuickStats> {
     firstPrompt: "",
     cwd: "",
     customTitle: "",
+    aiTitle: "",
   };
 
   let rl: readline.Interface | null = null;
@@ -131,7 +133,10 @@ export async function quickSessionStats(logFile: string): Promise<QuickStats> {
       }
 
       const t = extractStringField(line, '"customTitle":"');
-      if (t) stats.customTitle = t; // last non-empty wins
+      if (t) stats.customTitle = t; // last non-empty wins (user-set name)
+
+      const at = extractStringField(line, '"aiTitle":"');
+      if (at) stats.aiTitle = at; // last non-empty wins (auto-generated title)
 
       const ts = extractTimestampFromLine(line);
       if (ts) {
@@ -261,6 +266,7 @@ export async function discoverHistory(days: number): Promise<HistorySession[]> {
         endTime: new Date(end).toISOString(),
         durationMs: Math.max(0, end - start),
         messageCount: q.messageCount,
+        sessionTitle: q.customTitle || q.aiTitle || undefined,
         logFile,
         cwd: q.cwd || undefined,
         automated: isAutomatedSession({ cwd: q.cwd, project: displayName }) || undefined,

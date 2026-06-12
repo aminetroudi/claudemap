@@ -108,6 +108,8 @@ export interface HistorySession {
   messageCount: number;
   firstPrompt: string;
   lastMessage?: string;
+  /** User-set custom title, else AI-generated title, when present. */
+  sessionTitle?: string;
   logFile: string;
   /** Recorded working directory, when known — used to open a Resume terminal there. */
   cwd?: string;

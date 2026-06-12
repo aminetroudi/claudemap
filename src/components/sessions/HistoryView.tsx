@@ -159,7 +159,7 @@ export default function HistoryView({
             {group.items.map((s, i) => (
               <button
                 key={s.logFile}
-                onClick={() => onOpen(s.logFile, s.project)}
+                onClick={() => onOpen(s.logFile, s.sessionTitle || s.project)}
                 style={{
                   display: "block",
                   width: "100%",
@@ -193,6 +193,11 @@ export default function HistoryView({
                     </button>
                   </span>
                 </div>
+                {s.sessionTitle && (
+                  <div className="truncate" style={{ fontSize: "var(--t-sm)", marginTop: 3, color: "var(--ac)" }} title={s.sessionTitle}>
+                    {s.sessionTitle}
+                  </div>
+                )}
                 {s.firstPrompt && (
                   <div className="truncate faint" style={{ fontSize: "var(--t-sm)", marginTop: 3 }} title={s.firstPrompt}>
                     {s.firstPrompt}

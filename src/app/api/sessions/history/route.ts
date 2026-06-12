@@ -46,6 +46,7 @@ export async function GET(req: Request): Promise<Response> {
         endTime: new Date(end).toISOString(),
         durationMs: Math.max(0, end - start),
         messageCount: q.messageCount,
+        sessionTitle: s.sessionTitle || q.customTitle || q.aiTitle || undefined,
         lastMessage: s.lastMessage,
         logFile: s.logFile,
         cwd: s.projectPath || q.cwd || undefined,
