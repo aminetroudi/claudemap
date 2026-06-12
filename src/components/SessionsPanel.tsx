@@ -7,6 +7,7 @@ import { contextWindowForModel, EXTENDED_CONTEXT_WINDOW } from "@/lib/sessions/c
 import type { LiveSession, SessionStatus } from "@/lib/sessions/types";
 import HistoryView from "./sessions/HistoryView";
 import SessionDrawer from "./sessions/SessionDrawer";
+import UsageView from "./sessions/UsageView";
 import { formatTokens, relativeTime } from "./sessions/format";
 
 const STATUS_META: Record<SessionStatus, { dot: string; label: string; color: string }> = {
@@ -62,20 +63,11 @@ export default function SessionsPanel() {
 
       {tab === "live" && <LiveView onOpen={openDetail} />}
       {tab === "history" && <HistoryView onOpen={openDetail} />}
-      {tab === "usage" && <UsagePlaceholder />}
+      {tab === "usage" && <UsageView />}
 
       {drawer && (
         <SessionDrawer file={drawer.file} title={drawer.label} onClose={() => setDrawer(null)} />
       )}
-    </div>
-  );
-}
-
-function UsagePlaceholder() {
-  return (
-    <div className="card" style={{ padding: 40, textAlign: "center" }}>
-      <BarChart3 size={28} style={{ color: "var(--tx-3)", margin: "0 auto 12px" }} />
-      <div style={{ color: "var(--tx-2)" }}>Usage view arrives in the next phase.</div>
     </div>
   );
 }

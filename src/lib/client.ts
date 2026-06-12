@@ -4,6 +4,7 @@ import type {
   SessionMetrics,
   SessionsResult,
   TimelineResult,
+  UsageResult,
 } from "./sessions/types";
 
 export async function fetchItems(): Promise<ScanResult> {
@@ -56,6 +57,11 @@ export async function fetchMetrics(file: string): Promise<SessionMetrics> {
   const r = await fetch(`/api/sessions/metrics?file=${encodeURIComponent(file)}`, {
     cache: "no-store",
   });
+  return r.json();
+}
+
+export async function fetchUsage(): Promise<UsageResult> {
+  const r = await fetch("/api/sessions/usage", { cache: "no-store" });
   return r.json();
 }
 

@@ -38,6 +38,61 @@ export interface SessionsResult {
   error?: string;
 }
 
+// ── Usage view: local 5 h window + API quota ─────────────────────────
+// Port of csm UsageStats/SessionUsage/APIQuota/QuotaBucket (quota.go:14-58)
+// and ClaudeStatus (status.go:12-17). Token counts only — the OAuth token
+// itself NEVER appears in any of these wire shapes.
+
+export interface SessionUsage {
+  project: string;
+  logFile: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  totalTokens: number;
+  startTime: string; // ISO
+  endTime: string; // ISO
+}
+
+export interface UsageStats {
+  windowStart: string; // ISO
+  windowEnd: string; // ISO
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  totalTokens: number;
+  sessions: SessionUsage[];
+}
+
+export interface QuotaBucket {
+  utilization: number; // percentage 0–100
+  resetsAt: string | null; // ISO
+}
+
+export interface APIQuota {
+  available: boolean;
+  fiveHour?: QuotaBucket | null;
+  sevenDay?: QuotaBucket | null;
+  sevenDaySonnet?: QuotaBucket | null;
+  sevenDayOpus?: QuotaBucket | null;
+  extraUsage?: { isEnabled: boolean } | null;
+  error?: string;
+}
+
+export interface ClaudeStatus {
+  available: boolean;
+  indicator?: string; // none | minor | major | critical
+  description?: string;
+  error?: string;
+}
+
+export interface UsageResult {
+  local: UsageStats;
+  apiQuota: APIQuota;
+  status?: ClaudeStatus;
+  error?: string;
+}
+
 // ── History + detail (timeline/metrics) wire shapes ──────────────────
 // Port of csm HistorySession (history.go:14-24), TimelineEntry/Content and
 // SessionMetrics (timeline.go:13-49). Durations are MILLISECONDS, not Go ns.
