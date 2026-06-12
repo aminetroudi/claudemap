@@ -12,7 +12,7 @@ import { isAutomatedSession, isExcludedCwd } from "./classify";
 import { extractContextUsage } from "./context";
 import { readLastEntries } from "./jsonl";
 import { resolveOrigin } from "./origin";
-import { listClaudeProcesses, type ClaudeProcess } from "./process";
+import { collectLiveSessionIds, listClaudeProcesses, type ClaudeProcess } from "./process";
 import {
   detectUnsandboxedCommands,
   determineStatus,
@@ -132,7 +132,8 @@ async function findActiveLogs(dir: string, runningCount: number): Promise<string
 async function parseSession(
   encodedName: string,
   logFile: string,
-  proc?: ClaudeProcess,
+  proc: ClaudeProcess | undefined,
+  isRunning: boolean,
 ): Promise<LiveSession | null> {
   let stat;
   try {
@@ -149,7 +150,6 @@ async function parseSession(
     entries = [];
   }
 
-  const isRunning = proc != null;
   const { status, task } = determineStatus(entries, isRunning, stat.mtimeMs);
 
   // Metadata from the tail window. Prefer the real cwd over the lossy encoded
@@ -168,12 +168,16 @@ async function parseSession(
   if (!cwd && proc?.cwd) cwd = proc.cwd;
   const sessionTitle = customTitle || aiTitle;
 
-  // Actual last activity: newest entry timestamp, falling back to file mtime.
+  // Last activity = the more recent of the file mtime and the newest entry
+  // timestamp. mtime matters because a mid-turn session keeps the file fresh
+  // while its newest *timestamped* entry can lag far behind (heavy tool use
+  // before the assistant turn is flushed) — using the entry time alone would
+  // false-flag an active session as a long-idle ghost.
   let lastActivityMs = stat.mtimeMs;
   for (let i = entries.length - 1; i >= 0; i--) {
     const t = entries[i].timestamp;
     if (t != null) {
-      lastActivityMs = t;
+      lastActivityMs = Math.max(stat.mtimeMs, t);
       break;
     }
   }
@@ -200,7 +204,9 @@ async function parseSession(
     gitBranch: extractGitBranch(entries) || undefined,
     origin: origin ?? undefined,
     pid: proc?.pid,
-    kind: proc?.kind,
+    // A running session not tracked by `claude agents` is the user's
+    // interactive session (agents only reports background/dispatched ones).
+    kind: proc?.kind ?? (isRunning ? "interactive" : undefined),
     attachId: proc?.attachId,
     hasUnsandboxed: detectUnsandboxedCommands(entries) || undefined,
     contextPercent: context.contextTokens > 0 ? context.contextPercent : undefined,
@@ -208,7 +214,10 @@ async function parseSession(
     model: context.model || undefined,
     automated: isAutomatedSession({ cwd, project }) || undefined,
   };
-  if (proc && Date.now() - lastActivityMs > GHOST_AGE_MS) session.isGhost = true;
+  // Ghost = a confirmed-live session whose log has been silent past the
+  // threshold. Liveness is now exact (env-var session ids), so this no longer
+  // false-positives on stale logs that a guessed pid was attached to.
+  if (isRunning && Date.now() - lastActivityMs > GHOST_AGE_MS) session.isGhost = true;
   return session;
 }
 
@@ -221,11 +230,22 @@ export async function discoverSessions(): Promise<LiveSession[]> {
     return []; // no ~/.claude/projects yet
   }
 
-  const procs = await listClaudeProcesses();
+  // Two independent signals:
+  //  - `claude agents --json` (+ ps) → process metadata (kind, attachId, pid)
+  //    keyed by sessionId, for background/dispatched sessions.
+  //  - liveSessionIds → exact liveness for EVERY session (incl. the top-level
+  //    interactive one that `claude agents` omits), via /proc env vars.
+  const [procs, liveSessionIds] = await Promise.all([
+    listClaudeProcesses(),
+    collectLiveSessionIds(),
+  ]);
   const bySessionId = new Map<string, ClaudeProcess>();
   const byEncodedCwd = new Map<string, ClaudeProcess[]>();
   for (const p of procs) {
-    if (p.sessionId) bySessionId.set(p.sessionId, p);
+    if (p.sessionId) {
+      bySessionId.set(p.sessionId, p);
+      liveSessionIds.add(p.sessionId); // agents-reported sessions are live too
+    }
     const list = byEncodedCwd.get(p.encodedCwd);
     if (list) list.push(p);
     else byEncodedCwd.set(p.encodedCwd, [p]);
@@ -238,27 +258,20 @@ export async function discoverSessions(): Promise<LiveSession[]> {
 
     const projectDir = path.join(PROJECTS_DIR, dirent.name);
     const dirProcs = byEncodedCwd.get(dirent.name) ?? [];
+    // runningCount only governs how many recent logs to surface per dir.
     const logFiles = await findActiveLogs(projectDir, dirProcs.length);
     if (logFiles.length === 0) continue;
 
-    // Join processes to logs: sessionId match first; processes without a
-    // sessionId (ps-scan fallback) are paired to remaining logs by recency
-    // index — most recent log gets the first PID (csm session.go:319-324).
-    const matched = new Map<string, ClaudeProcess>();
     for (const logFile of logFiles) {
-      const proc = bySessionId.get(path.basename(logFile, ".jsonl"));
-      if (proc) matched.set(logFile, proc);
-    }
-    const anonymous = dirProcs.filter((p) => !p.sessionId);
-    let cursor = 0;
-    for (const logFile of logFiles) {
-      if (matched.has(logFile)) continue;
-      if (cursor >= anonymous.length) break;
-      matched.set(logFile, anonymous[cursor++]);
-    }
-
-    for (const logFile of logFiles) {
-      const session = await parseSession(dirent.name, logFile, matched.get(logFile));
+      const sid = path.basename(logFile, ".jsonl");
+      // Liveness is keyed by session id (exact), not by guessing which pid
+      // wrote which log. proc (if any) only supplies kind/attachId/pid.
+      const session = await parseSession(
+        dirent.name,
+        logFile,
+        bySessionId.get(sid),
+        liveSessionIds.has(sid),
+      );
       if (session) sessions.push(session);
     }
   }

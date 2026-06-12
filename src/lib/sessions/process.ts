@@ -100,3 +100,53 @@ export async function listClaudeProcesses(): Promise<ClaudeProcess[]> {
   const seen = new Set(primary.map((p) => p.pid));
   return [...primary, ...supplement.filter((p) => !seen.has(p.pid))];
 }
+
+/**
+ * Session ids of all live Claude processes, read from `/proc/<pid>/environ`
+ * (`CLAUDE_CODE_SESSION_ID`). A session is "running" iff its id appears here.
+ *
+ * This is the reliable liveness signal: `claude agents --json` omits the
+ * top-level interactive session, so pid→log guessing put live pids on stale
+ * logs (false "running" → false ghosts). The env var is exact. Child processes
+ * (Bash tools, spawned CLIs) inherit it — that's fine: their presence still
+ * proves the session's process tree is alive, and the id maps to the parent's
+ * log regardless of the child's cwd. Linux-only (no-op elsewhere).
+ */
+export async function collectLiveSessionIds(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileP("ps", ["ax", "-o", "pid=,comm="], { timeout: 10_000 }));
+  } catch {
+    return ids;
+  }
+
+  const pids: number[] = [];
+  for (const line of stdout.split("\n")) {
+    const fields = line.trim().split(/\s+/);
+    if (fields.length < 2) continue;
+    if (!fields[fields.length - 1].endsWith("claude")) continue;
+    const pid = Number.parseInt(fields[0], 10);
+    if (Number.isInteger(pid) && pid > 0) pids.push(pid);
+  }
+
+  const PREFIX = "CLAUDE_CODE_SESSION_ID=";
+  await Promise.all(
+    pids.map(async (pid) => {
+      let data: Buffer;
+      try {
+        data = await fs.readFile(`/proc/${pid}/environ`);
+      } catch {
+        return; // other-user process or already gone
+      }
+      for (const entry of data.toString("utf8").split("\0")) {
+        if (entry.startsWith(PREFIX)) {
+          const v = entry.slice(PREFIX.length);
+          if (v) ids.add(v);
+          break;
+        }
+      }
+    }),
+  );
+  return ids;
+}
