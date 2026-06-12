@@ -12,6 +12,7 @@ import OverviewPanel from "@/components/OverviewPanel";
 import { SkeletonFullPage, SkeletonList } from "@/components/Skeleton";
 import ProjectsPanel from "@/components/ProjectsPanel";
 import McpPanel from "@/components/McpPanel";
+import SessionsPanel from "@/components/SessionsPanel";
 import {
   fetchItems,
   fetchMarketplaces,
@@ -107,6 +108,7 @@ export default function Home() {
     "claude-md": "CLAUDE.md files",
     "loose-md": "Loose Markdown",
     projects: "Projects",
+    sessions: "Sessions",
     mcp: "MCP Servers",
     marketplace: "Browse & Install",
     settings: "Settings",
@@ -121,6 +123,7 @@ export default function Home() {
     { id: "claude-md", label: "CLAUDE.md", icon: null },
     { id: "loose-md", label: "Loose .md", icon: null },
     { id: "projects", label: "Projects", icon: null },
+    { id: "sessions", label: "Sessions", icon: null },
     { id: "mcp", label: "MCP Servers", icon: null },
     { id: "marketplace", label: "Browse & Install", icon: null },
     { id: "settings", label: "Settings", icon: null },
@@ -180,6 +183,18 @@ export default function Home() {
               transition={{ duration: 0.2 }}
             >
               <ProjectsPanel items={allItems} projects={projects} />
+            </motion.div>
+          )}
+
+          {scan !== null && section === "sessions" && (
+            <motion.div
+              key="sessions"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <SessionsPanel />
             </motion.div>
           )}
 

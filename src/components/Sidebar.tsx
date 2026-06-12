@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, Bot, Box, Brain, Files, FolderOpen, LayoutDashboard, Moon, RefreshCw, Server, Settings, Store, Sun, Zap } from "lucide-react";
+import { Activity, BookOpen, Bot, Box, Brain, Files, FolderOpen, LayoutDashboard, Moon, RefreshCw, Server, Settings, Store, Sun, Zap } from "lucide-react";
 import type { AnyItem, ItemKind } from "@/lib/types";
 import { getTheme, toggleTheme, type Theme } from "@/lib/theme";
 
 export type Section =
   | "overview" | "skill" | "plugin" | "agent" | "memory"
-  | "claude-md" | "loose-md" | "projects" | "mcp" | "marketplace" | "settings";
+  | "claude-md" | "loose-md" | "projects" | "sessions" | "mcp" | "marketplace" | "settings";
 
 const NAV: Array<{ id: Section; label: string; icon: React.ReactNode; kind?: ItemKind; sep?: boolean }> = [
   { id: "overview",    label: "Overview",         icon: <LayoutDashboard size={18} /> },
@@ -19,7 +19,8 @@ const NAV: Array<{ id: Section; label: string; icon: React.ReactNode; kind?: Ite
   { id: "claude-md",   label: "CLAUDE.md",         icon: <BookOpen size={18} />,  kind: "claude-md" },
   { id: "loose-md",    label: "Loose .md",         icon: <Files size={18} />,     kind: "loose-md" },
   { id: "projects",    label: "Projects",          icon: <FolderOpen size={18} /> },
-  { id: "mcp",         label: "MCP Servers",       icon: <Server size={18} />,   sep: true },
+  { id: "sessions",    label: "Sessions",          icon: <Activity size={18} />, sep: true },
+  { id: "mcp",         label: "MCP Servers",       icon: <Server size={18} /> },
   { id: "marketplace", label: "Browse & Install",  icon: <Store size={18} /> },
   { id: "settings",    label: "Settings",          icon: <Settings size={18} /> },
 ];

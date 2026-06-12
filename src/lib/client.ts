@@ -1,4 +1,5 @@
 import type { AnyItem, AppConfig, McpResult, ScanResult } from "./types";
+import type { SessionsResult } from "./sessions/types";
 
 export async function fetchItems(): Promise<ScanResult> {
   const r = await fetch("/api/items", { cache: "no-store" });
@@ -27,6 +28,11 @@ export async function fetchProjects(): Promise<string[]> {
 
 export async function fetchMcp(): Promise<McpResult> {
   const r = await fetch("/api/mcp", { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchSessions(): Promise<SessionsResult> {
+  const r = await fetch("/api/sessions", { cache: "no-store" });
   return r.json();
 }
 
