@@ -13,7 +13,7 @@ It runs a Next.js app on `http://127.0.0.1:3737`. Browse, toggle, edit, promote/
 ## Quick start
 
 ```bash
-git clone https://github.com/protoxy/claudemap
+git clone https://github.com/aminetroudi/claudemap
 cd claudemap
 bun install
 ./claudemap.sh start      # builds on first run, then serves detached on :3737
@@ -214,4 +214,4 @@ See `AGENTS.md`. This repo targets **Next.js 16** with breaking changes vs. olde
 
 ## License
 
-[MIT](./LICENSE) © protoxy
+[MIT](./LICENSE) © Mohamed Amine Troudi
