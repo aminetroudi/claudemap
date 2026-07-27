@@ -106,6 +106,50 @@ Click any row for a **detail drawer**: token/turn/tool metrics and a paginated, 
 
 `claudemap.sh` logs to `~/.claudemap.log`. The dashboard's own config (scan paths, excludePaths) lives at `~/.claude/claude-dashboard.config.json` and is editable from the Settings tab.
 
+Two config keys are not surfaced in Settings:
+
+| Key                | What it does                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `terminalEmulator` | Emulator binary to prefer over `gnome-terminal` / `tilix` / `x-terminal-emulator`                                 |
+| `display`          | X display (e.g. `":0"`) for spawned terminals, when the server inherited none — see the `@reboot` cron note below |
+
+---
+
+## Platform support
+
+**Linux, and WSL2 with WSLg. Native Windows and macOS are not supported.**
+
+This is a host-introspection tool. It reads `/proc/<pid>/{cwd,environ,status,comm,exe}` for live session discovery and origin detection, shells out to `ps`, and spawns an X/Wayland terminal emulator. Those are Linux interfaces, and the Sessions view — the reason the tool exists — is built directly on them.
+
+### WSL2
+
+Works unmodified, provided **Claude Code also runs inside WSL**. Same kernel, same `/proc`, `claude` is a native Linux binary, and `~/.claude` is the WSL home. Two things to know:
+
+- **Reaching the UI from Windows.** The server binds `127.0.0.1` only, and WSL2's legacy NAT-mode localhost forwarding is unreliable for loopback-only binds. Enable mirrored networking in `%UserProfile%\.wslconfig` (WSL 2.0+, Windows 11):
+
+  ```ini
+  [wsl2]
+  networkingMode=mirrored
+  ```
+
+  Then `http://localhost:3737` works from a Windows browser. **Do not** work around this by binding `0.0.0.0` — the dashboard has no auth (see [Security](#security)).
+
+- **Terminal buttons.** WSLg supplies `DISPLAY`/`WAYLAND_DISPLAY` and renders Linux windows on the Windows desktop, but no default WSL distro ships a terminal emulator — `apt install gnome-terminal`. `wt.exe` is deliberately not driven through the WSL interop layer: its command line is reassembled under Windows quoting rules and `wt.exe` splits on `;`, which the `<cmd>; exec bash` payload contains, so supporting it would mean building a shell string and giving up the argv-only guarantee in [Security](#security).
+
+If Claude Code runs on **native Windows** while claudemap runs in WSL, it will not work and cannot be configured to: `~/.claude` resolves to the WSL home (`src/lib/paths.ts` derives every path from `os.homedir()` with no override), and WSL's `/proc` cannot see Windows processes.
+
+### `@reboot` cron / systemd
+
+A server started outside a graphical shell inherits no `DISPLAY`, which used to fail the terminal buttons closed. It now falls back to `display` from the config file, then to WSLg's defaults when `/mnt/wslg/.X11-unix` exists. On a plain Linux box started from cron, set `display` explicitly.
+
+### macOS
+
+Not supported today, but the gap is small and PRs are welcome — macOS is POSIX, so `ps`, the launcher script, `claude` on `PATH`, project-key encoding, and the Memory view all work as-is. What needs a platform shim is process `cwd` (`lsof -p <pid> -a -d cwd`), process environ (`ps eww -p <pid>`, own uid only), and terminal spawning (`open -a` / `osascript`). That reaches near-parity with Linux, unlike Windows, where per-process cwd and environ are simply not exposed.
+
+### iOS
+
+Not applicable, and not a roadmap item. claudemap introspects the machine Claude Code runs on: it needs unrestricted filesystem access to `~/.claude`, the process table, and the ability to spawn terminals. iOS grants an app none of those, and Claude Code does not run there. The remote-viewer idea it suggests — a phone watching sessions on your workstation — would be a different product with a different security model, since it requires exposing the dashboard off-host, which this one is explicitly built not to do.
+
 ---
 
 ## Security

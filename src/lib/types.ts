@@ -131,4 +131,8 @@ export interface AppConfig {
   /** Optional terminal-emulator binary to prefer when opening a session
    * terminal (Sessions view). Falls back to x-terminal-emulator/gnome-terminal/tilix. */
   terminalEmulator?: string;
+  /** X display to hand the spawned terminal (e.g. ":0") when the server itself
+   * inherited none — the case when claudemap is started from `@reboot` cron or a
+   * systemd unit rather than a graphical shell. */
+  display?: string;
 }

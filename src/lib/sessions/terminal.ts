@@ -1,5 +1,6 @@
 // Terminal spawner — the capability csm lacks: open a graphical terminal that
-// attaches to / resumes / shells into a Claude session. Linux/GNOME (this box).
+// attaches to / resumes / shells into a Claude session. Linux/GNOME (this box)
+// and WSL2 with WSLg, which is Linux as far as everything below is concerned.
 //
 // SECURITY MODEL (all four enforced here):
 //  1. argv arrays only — spawn(bin, args). No shell string, no shell:true, no
@@ -22,7 +23,44 @@ const execFileP = promisify(execFile);
 const ATTACH_ID_RE = /^[0-9a-f]{8}$/;
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
+/** WSLg's X socket. Present iff this kernel is WSL2 and WSLg is available. */
+const WSLG_X11 = "/mnt/wslg/.X11-unix";
+
+/**
+ * Resolve the display env the spawned terminal needs, or null when the box is
+ * genuinely headless. Returns env overrides to merge into the child's env.
+ *
+ * Three sources, in order:
+ *  1. Whatever the server inherited — the normal case, started from a graphical
+ *     shell by claudemap.sh.
+ *  2. A configured `display` — for servers started with no graphical env at all
+ *     (`@reboot` cron, systemd user unit), where the inherited env is empty even
+ *     though a session exists. Previously this case failed closed.
+ *  3. WSLg's fixed defaults, when its X socket is on disk. WSLg normally exports
+ *     these itself, so this only fires for the cron/systemd case above.
+ */
+async function resolveDisplayEnv(): Promise<Record<string, string> | null> {
+  if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) return {};
+
+  const cfg = await loadConfig();
+  if (cfg.display) return { DISPLAY: cfg.display };
+
+  try {
+    await fs.access(WSLG_X11);
+    return { DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0" };
+  } catch {
+    return null;
+  }
+}
+
 // Preference order; spawn resolves each via PATH (csm targets none of these).
+// Under WSL these are the same Linux binaries — WSLg renders their windows on
+// the Windows desktop — so no Windows-specific entry belongs here. Driving
+// wt.exe through the WSL interop layer is deliberately NOT attempted: its
+// command line is reassembled by Windows quoting rules and `wt.exe` splits on
+// `;`, which our `<cmd>; exec bash` payload contains. That would mean building
+// a shell string, breaking invariant 1 below. Set `terminalEmulator` if you
+// want to point at something else.
 // gnome-terminal and tilix are tried before x-terminal-emulator because the
 // latter is an `alternatives` symlink that, on Debian/Ubuntu, points at
 // gnome-terminal.wrapper — a legacy shim that silently DROPS --working-directory
@@ -70,8 +108,11 @@ export async function spawnSessionTerminal(
   const { mode } = input;
 
   // Headless guard — the server may run with no graphical session attached.
-  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
-    throw new Error("no graphical session available to claudemap server");
+  const displayEnv = await resolveDisplayEnv();
+  if (!displayEnv) {
+    throw new Error(
+      "no graphical session available to claudemap server (set `display` in ~/.claude/claude-dashboard.config.json if one exists)",
+    );
   }
 
   // cwd must resolve under $HOME and be a real directory.
@@ -123,7 +164,12 @@ export async function spawnSessionTerminal(
 
   // Also set the child's own cwd so emulators that spawn their shell directly
   // (rather than via a session server) inherit the right directory too.
-  const child = spawn(emulator, args, { cwd, detached: true, stdio: "ignore" });
+  const child = spawn(emulator, args, {
+    cwd,
+    detached: true,
+    stdio: "ignore",
+    env: { ...process.env, ...displayEnv },
+  });
   child.unref(); // survive the server process
 
   return { ok: true, emulator, mode };
