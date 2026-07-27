@@ -4,13 +4,38 @@ A **local web dashboard** for your whole `~/.claude/` — skills, agents, plugin
 
 It runs a Next.js app on `http://127.0.0.1:3737`. Browse, toggle, edit, promote/demote, install, uninstall, watch running sessions — without hunting through scattered JSON and Markdown.
 
-![Overview](./public/screenshots/overview.png)
+```bash
+npx claudemap
+```
 
-> Not a Claude Code plugin. It's a plain local server you start yourself and leave running — a host-introspection tool that needs real filesystem, process, and (for the Sessions terminal buttons) GUI access, none of which fit the plugin/container model.
+<!-- Absolute URL, not a repo-relative path: npmjs.com does not resolve relative
+     images when it renders this README on the package page. -->
+
+![Overview](https://raw.githubusercontent.com/aminetroudi/claudemap/main/public/screenshots/overview.png)
+
+> Not a Claude Code plugin. It's a plain local server you start yourself and leave running — a host-introspection tool that needs real filesystem, process, and (for the Sessions terminal buttons) GUI access, none of which fit the plugin/container model. Read [Threat model](#threat-model) before running it.
 
 ---
 
 ## Quick start
+
+```bash
+npx claudemap              # :3737, or the next free port
+```
+
+That's the whole install — the published package ships a prebuilt server, so there is no build step and no `node_modules` to install. Requires Node 20+. Then open `http://127.0.0.1:3737`.
+
+`npx claudemap` runs in the foreground; Ctrl-C stops it. For a **detached** server that outlives the terminal that launched it, use the repo's `claudemap.sh` (below).
+
+| Flag / env      | Effect                                                        |
+| --------------- | ------------------------------------------------------------- |
+| `--port <n>`    | Port to listen on (default `3737`; busy → next free port)     |
+| `PORT=<n>`      | Same, via env                                                 |
+| `--help`        | Usage                                                         |
+
+The bind address is **not** configurable — see [Threat model](#threat-model).
+
+### From a clone
 
 ```bash
 git clone https://github.com/aminetroudi/claudemap
@@ -19,12 +44,17 @@ bun install
 ./claudemap.sh start      # builds on first run, then serves detached on :3737
 ```
 
-Open `http://127.0.0.1:3737`. The server is **detached** — it keeps running after you close the terminal that launched it.
-
 For development with hot reload:
 
 ```bash
 bun run dev               # :3000, hot reload
+```
+
+To build the publishable bundle the way `npx` consumes it:
+
+```bash
+npm run build && npm run stage   # -> dist/server.js
+node bin/claudemap.js
 ```
 
 ---
@@ -136,7 +166,7 @@ Works unmodified, provided **Claude Code also runs inside WSL**. Same kernel, sa
 
 - **Terminal buttons.** WSLg supplies `DISPLAY`/`WAYLAND_DISPLAY` and renders Linux windows on the Windows desktop, but no default WSL distro ships a terminal emulator — `apt install gnome-terminal`. `wt.exe` is deliberately not driven through the WSL interop layer: its command line is reassembled under Windows quoting rules and `wt.exe` splits on `;`, which the `<cmd>; exec bash` payload contains, so supporting it would mean building a shell string and giving up the argv-only guarantee in [Security](#security).
 
-If Claude Code runs on **native Windows** while claudemap runs in WSL, it will not work and cannot be configured to: `~/.claude` resolves to the WSL home (`src/lib/paths.ts` derives every path from `os.homedir()` with no override), and WSL's `/proc` cannot see Windows processes.
+If Claude Code runs on **native Windows** while claudemap runs in WSL, it will not work. You can point the file scanners at the Windows-side config — every path derives from `os.homedir()` (`src/lib/paths.ts`), which honors `$HOME`, so `HOME=/mnt/c/Users/<you> npx claudemap` redirects them, the same mechanism `scripts/demo-run.mjs` uses for screenshots. But the Sessions view still won't work: WSL's `/proc` is a separate kernel and cannot see Windows processes, and the Windows-side project keys (`C--Users-you-...`) decode to invalid paths. Reading `~/.claude` over `/mnt/c` is also slow enough on 9p to be unpleasant.
 
 ### `@reboot` cron / systemd
 
@@ -152,9 +182,36 @@ Not applicable, and not a roadmap item. claudemap introspects the machine Claude
 
 ---
 
+## Threat model
+
+Read this before you run it, and before reporting anything as a vulnerability.
+
+**What it is.** A single-user tool that introspects the machine it runs on. It holds the privileges of the user who started it, and it is designed for exactly one trust boundary: **the loopback interface on a machine you control**.
+
+**What it can do, by design:**
+
+- **Read and write everything under `~/.claude/`** — skills, agents, settings, `MEMORY.md`, `~/.claude.json`, `~/.mcp.json`. Editing and toggling from the UI writes real files.
+- **Read your Claude Code session logs** in `~/.claude/projects/*/*.jsonl`, which contain full prompt and response transcripts.
+- **Read your OAuth access token** from `~/.claude/.credentials.json`, server-side, to fetch the quota view. It stays in the server process; responses carry utilization percentages only.
+- **Spawn graphical terminals** running `claude attach` / `claude --resume`, and **send SIGTERM** to processes it identifies as idle `claude` sessions.
+- **Invoke `claude plugin install`** when you install from the Marketplace tab.
+
+**There is no authentication.** None. Anything that can issue HTTP requests to the port has all of the above. That is why the bind address is hardcoded to `127.0.0.1` in `bin/claudemap.js` and is not exposeable by flag or env — an ambient `HOSTNAME=0.0.0.0` is overwritten, not honored.
+
+**What is still yours to get right:**
+
+- Don't put it behind a tunnel, reverse proxy, port-forward, or `kubectl port-forward`. "Localhost-only" stops being true the moment you do, and every capability above becomes remote.
+- Any other **local** process running as you can reach the port. On a shared or multi-user box, so can anything running as you via a compromised dependency. Run it where you develop, not on a jumphost, build agent, or production server.
+- A **malicious web page** you visit cannot mutate state — mutating routes require a same-origin `Origin` header (`src/middleware.ts`) — but treat that as defense in depth, not a licence to leave it running unattended on a machine you don't trust.
+- **Back up `~/.claude/` before bulk operations.** Trash actions are reversible; not everything else is.
+
+**Reporting.** If you find something that breaks the model above — a path that escapes `~/.claude/`, a way to reach the server off-loopback, a shell injection in the terminal spawner — open an issue at [github.com/aminetroudi/claudemap/issues](https://github.com/aminetroudi/claudemap/issues). "It has no auth" and "it reads my files" are documented above, not findings.
+
+---
+
 ## Security
 
-This is a **local power-user tool**, not a hosted service. It reads and writes files under `~/.claude/`, spawns terminals, and can signal processes.
+The mitigations behind the model above. This is a **local power-user tool**, not a hosted service: it reads and writes files under `~/.claude/`, spawns terminals, and can signal processes.
 
 - The server binds to **`127.0.0.1` only** (`claudemap.sh`). It has no auth — **never expose the port**.
 - Mutating API routes enforce a **same-origin check** (`src/middleware.ts`): a malicious page can't silently POST/PUT/DELETE to the local API.
