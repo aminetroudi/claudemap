@@ -1,11 +1,41 @@
 {
   "name": "claudemap",
   "version": "0.1.0",
-  "private": true,
+  "description": "Local web dashboard for your whole ~/.claude — skills, agents, plugins, MCP servers, memory, and live Claude Code sessions.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "dashboard",
+    "skills",
+    "agents",
+    "mcp",
+    "sessions",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "protoxy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aminetroudi/claudemap.git"
+  },
+  "homepage": "https://github.com/aminetroudi/claudemap#readme",
+  "bugs": "https://github.com/aminetroudi/claudemap/issues",
+  "bin": {
+    "claudemap": "bin/claudemap.js"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "stage": "node scripts/build-dist.mjs",
+    "prepack": "npm run build && npm run stage"
   },
   "dependencies": {
     "cmdk": "^1.1.1",
