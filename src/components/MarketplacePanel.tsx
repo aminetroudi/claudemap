@@ -103,7 +103,7 @@ export default function MarketplacePanel({
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: 14,
-                    padding: "16px 18px",
+                    padding: "10px 12px",
                     cursor: "pointer",
                     userSelect: "none",
                     background: isOpen ? "var(--bg-2)" : "transparent",
@@ -250,7 +250,7 @@ function PluginList({ plugins, mpName, installedPlugins, install, installing, in
           return (
             <div key={p.name} style={{
               display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
-              padding: "8px 14px", borderBottom: i < filtered.length - 1 ? "1px solid var(--line)" : "none",
+              padding: "6px 10px", borderBottom: i < filtered.length - 1 ? "1px solid var(--line)" : "none",
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>

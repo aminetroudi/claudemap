@@ -59,13 +59,13 @@ export default function McpPanel({
       </div>
 
       {errMsg && (
-        <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-md)" }}>
+        <div style={{ padding: "7px 11px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-md)" }}>
           {errMsg}
         </div>
       )}
 
       {errors.length > 0 && (
-        <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "var(--amber-dim)", border: "1px solid rgba(251 191 36 / 0.2)", color: "var(--amber)", fontSize: "var(--t-sm)" }}>
+        <div style={{ padding: "7px 11px", borderRadius: "var(--r)", background: "var(--amber-dim)", border: "1px solid rgba(251 191 36 / 0.2)", color: "var(--amber)", fontSize: "var(--t-sm)" }}>
           {errors.map((e, i) => <div key={i}>{e}</div>)}
         </div>
       )}
@@ -188,7 +188,7 @@ function ServerRow({ server, onEdit, onDelete, deleting }: {
   return (
     <div className="card" style={{ overflow: "hidden" }}>
       {/* Main row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px" }}>
         <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "var(--r)", background: "var(--bg-3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Terminal size={17} style={{ color: "var(--ac)" }} />
         </div>
@@ -232,7 +232,7 @@ function ServerRow({ server, onEdit, onDelete, deleting }: {
       {/* Expanded details */}
       <div className={`accordion-body${expanded ? " open" : ""}`} style={{ borderTop: expanded ? "1px solid var(--line)" : "none" }}>
         <div className="accordion-inner">
-          <div style={{ padding: "12px 18px", display: "grid", gap: 10 }}>
+          <div style={{ padding: "10px 12px", display: "grid", gap: 10 }}>
             {hasArgs && (
               <div>
                 <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", marginBottom: 4, fontFamily: "var(--font-mono), monospace" }}>ARGS</div>
@@ -285,7 +285,7 @@ function CloudServerRow({ server }: { server: CloudMcpServer }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="card" style={{ overflow: "hidden", borderColor: "rgba(167 139 250 / 0.2)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px" }}>
         <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "var(--r)", background: "rgba(167 139 250 / 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Cloud size={17} style={{ color: "#a78bfa" }} />
         </div>
@@ -306,7 +306,7 @@ function CloudServerRow({ server }: { server: CloudMcpServer }) {
 
       <div className={`accordion-body${expanded ? " open" : ""}`} style={{ borderTop: expanded ? "1px solid var(--line)" : "none" }}>
         <div className="accordion-inner">
-          <div style={{ padding: "12px 18px", display: "grid", gap: 12 }}>
+          <div style={{ padding: "10px 12px", display: "grid", gap: 12 }}>
             {server.projects.length > 0 && (
               <div>
                 <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", marginBottom: 6, fontFamily: "var(--font-mono), monospace" }}>AUTHORIZED IN PROJECTS</div>
@@ -422,7 +422,7 @@ function McpFormModal({ initial, projects, onClose, onSaved }: {
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", flexShrink: 0 }}>
           <div style={{ fontWeight: 700, fontSize: "var(--t-2xl)" }}>{initial ? "Edit MCP Server" : "Add MCP Server"}</div>
           <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", marginTop: 2 }}>
             {initial ? `Editing "${initial.name}"` : "Configure a new MCP server"}
@@ -432,7 +432,7 @@ function McpFormModal({ initial, projects, onClose, onSaved }: {
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px", display: "grid", gap: 16 }}>
           {err && (
-            <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-sm)" }}>
+            <div style={{ padding: "7px 11px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-sm)" }}>
               {err}
             </div>
           )}

@@ -297,40 +297,18 @@ export default function OverviewTree({
       }}
     >
       <div
-        style={{
-          position: "sticky",
-          top: 0,
-          background: "var(--bg-2)",
-          borderBottom: "1px solid var(--line)",
-          padding: "8px 12px",
-          paddingRight: 220,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          zIndex: 1,
-        }}
+        className="panel-head"
+        style={{ position: "sticky", top: 0, background: "var(--bg-1)", zIndex: 1 }}
       >
-        <div
-          style={{
-            fontSize: "var(--t-md)",
-            fontWeight: 600,
-            color: "var(--tx-3)",
-            letterSpacing: "0.06em",
-            fontFamily: "var(--font-mono), monospace",
-          }}
-        >
-          FILE TREE · {items.length} files
-        </div>
+        <span className="eyebrow">
+          file tree · <span className="num">{items.length}</span> files
+        </span>
         <div style={{ display: "flex", gap: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={expandAll}>
-            expand all
-          </button>
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={collapseAll}>
-            collapse all
-          </button>
+          <button className="btn btn-ghost btn-sm" onClick={expandAll}>expand all</button>
+          <button className="btn btn-ghost btn-sm" onClick={collapseAll}>collapse all</button>
         </div>
       </div>
-      <div style={{ padding: "6px 0" }}>
+      <div style={{ padding: "4px 0" }}>
         {roots.map((r) => (
           <Row key={r.fullPath} node={r} depth={0} expanded={expanded} onToggle={toggle} onView={onView} />
         ))}

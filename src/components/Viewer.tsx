@@ -90,7 +90,7 @@ export default function Viewer({ item, onClose }: { item: AnyItem; onClose: () =
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "12px 14px" }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "9px 11px" }}>
           {err && (
             <div style={{ padding: "7px 10px", marginBottom: 10, borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-md)" }}>{err}</div>
           )}

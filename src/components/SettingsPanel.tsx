@@ -33,7 +33,7 @@ export default function SettingsPanel({ onSaved }: { onSaved: () => void }) {
     <div style={{ display: "grid", gap: 16, maxWidth: 720 }}>
       {saved && (
         <div style={{
-          padding: "8px 14px",
+          padding: "6px 10px",
           borderRadius: "var(--r)",
           background: "rgba(52 211 153 / 0.08)",
           border: "1px solid rgba(16 185 129 / 0.25)",

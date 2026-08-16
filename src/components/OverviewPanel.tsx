@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { AlertTriangle, Bot, BookOpen, Box, Brain, Files, FolderOpen, Zap } from "lucide-react";
 import type { AnyItem, ItemKind } from "@/lib/types";
 import { kindLabel, shortDate } from "@/lib/client";
@@ -8,13 +7,46 @@ import type { Section } from "./Sidebar";
 import OverviewMap from "./OverviewMap";
 
 const STATS: Array<{ kind: ItemKind; icon: React.ReactNode; section: Section; color: string }> = [
-  { kind: "skill",     icon: <Zap size={20} />,      section: "skill",     color: "#818cf8" },
-  { kind: "plugin",    icon: <Box size={20} />,       section: "plugin",    color: "#fbbf24" },
-  { kind: "agent",     icon: <Bot size={20} />,       section: "agent",     color: "#34d399" },
-  { kind: "memory",    icon: <Brain size={20} />,     section: "memory",    color: "#c084fc" },
-  { kind: "claude-md", icon: <BookOpen size={20} />,  section: "claude-md", color: "#38bdf8" },
-  { kind: "loose-md",  icon: <Files size={20} />,     section: "loose-md",  color: "#94a3b8" },
+  { kind: "skill",     icon: <Zap size={13} />,      section: "skill",     color: "#818cf8" },
+  { kind: "plugin",    icon: <Box size={13} />,      section: "plugin",    color: "#fbbf24" },
+  { kind: "agent",     icon: <Bot size={13} />,      section: "agent",     color: "#34d399" },
+  { kind: "memory",    icon: <Brain size={13} />,    section: "memory",    color: "#c084fc" },
+  { kind: "claude-md", icon: <BookOpen size={13} />, section: "claude-md", color: "#38bdf8" },
+  { kind: "loose-md",  icon: <Files size={13} />,    section: "loose-md",  color: "#94a3b8" },
 ];
+
+/** A readout tile: number first, label under it, kind colour as a 13px cue. */
+function Stat({ label, count, icon, color, onClick }: {
+  label: string;
+  count: number;
+  icon: React.ReactNode;
+  color: string;
+  onClick: () => void;
+}) {
+  const empty = count === 0;
+  return (
+    <button
+      className="card card-interactive"
+      onClick={onClick}
+      style={{
+        padding: "10px 12px",
+        textAlign: "left",
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        opacity: empty ? 0.55 : 1,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 6, color: empty ? "var(--tx-3)" : color }}>
+        {icon}
+        <span className="eyebrow" style={{ color: "inherit", opacity: empty ? 1 : 0.85 }}>{label}</span>
+      </span>
+      <span className="num" style={{ fontSize: "var(--t-2xl)", fontWeight: 600, lineHeight: 1.15 }}>
+        {count}
+      </span>
+    </button>
+  );
+}
 
 export default function OverviewPanel({ items, scannedAt, errors, onSection, onView }: {
   items: AnyItem[];
@@ -26,144 +58,80 @@ export default function OverviewPanel({ items, scannedAt, errors, onSection, onV
   const byKind: Record<string, AnyItem[]> = {};
   for (const it of items) { if (!byKind[it.kind]) byKind[it.kind] = []; byKind[it.kind].push(it); }
   const projectCount = new Set(items.filter(i => i.projectRoot).map(i => i.projectRoot)).size;
-  const recent = [...items].filter(i => i.modifiedAt).sort((a, b) => (b.modifiedAt ?? "").localeCompare(a.modifiedAt ?? "")).slice(0, 10);
+  const recent = [...items]
+    .filter(i => i.modifiedAt)
+    .sort((a, b) => (b.modifiedAt ?? "").localeCompare(a.modifiedAt ?? ""))
+    .slice(0, 10);
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      {/* Stat grid */}
-      <motion.div
-        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 6 }}
-        initial="hidden"
-        animate="visible"
-        variants={{
-          hidden: { opacity: 0 },
-          visible: {
-            opacity: 1,
-            transition: {
-              staggerChildren: 0.08,
-              delayChildren: 0.05,
-            },
-          },
-        }}
-      >
-        {STATS.map(({ kind, icon, section, color }) => {
-          const count = byKind[kind]?.length ?? 0;
-          return (
-            <motion.button
-              key={kind}
-              className="card card-interactive"
-              onClick={() => onSection(section)}
-              style={{ padding: "14px", textAlign: "left" }}
-              variants={{
-                hidden: { opacity: 0, scale: 0.9 },
-                visible: { opacity: 1, scale: 1 },
-              }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div style={{ color, opacity: count === 0 ? 0.25 : 0.75, marginBottom: 10 }}>{icon}</div>
-              <div style={{ fontSize: "var(--t-display)", fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: "var(--font-mono), monospace" }}>
-                {count}
-              </div>
-              <div style={{ fontSize: "var(--t-md)", color: "var(--tx-3)", marginTop: 4 }}>
-                {kindLabel(kind)}{count !== 1 ? "s" : ""}
-              </div>
-            </motion.button>
-          );
-        })}
-        <motion.button
-          className="card card-interactive"
+    <div style={{ display: "grid", gap: 12 }}>
+      {/* Readout strip */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))", gap: 6 }}>
+        {STATS.map(({ kind, icon, section, color }) => (
+          <Stat
+            key={kind}
+            label={kindLabel(kind)}
+            count={byKind[kind]?.length ?? 0}
+            icon={icon}
+            color={color}
+            onClick={() => onSection(section)}
+          />
+        ))}
+        <Stat
+          label="Projects"
+          count={projectCount}
+          icon={<FolderOpen size={13} />}
+          color="#94a3b8"
           onClick={() => onSection("projects")}
-          style={{ padding: "14px", textAlign: "left" }}
-          variants={{
-            hidden: { opacity: 0, scale: 0.9 },
-            visible: { opacity: 1, scale: 1 },
-          }}
-          whileHover={{ y: -4, scale: 1.02 }}
-          transition={{ duration: 0.2 }}
-        >
-          <div style={{ color: "#64748b", opacity: 0.75, marginBottom: 10 }}><FolderOpen size={20} /></div>
-          <div style={{ fontSize: "var(--t-display)", fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em", fontFamily: "var(--font-mono), monospace" }}>
-            {projectCount}
-          </div>
-          <div style={{ fontSize: "var(--t-md)", color: "var(--tx-3)", marginTop: 4 }}>Project{projectCount !== 1 ? "s" : ""}</div>
-        </motion.button>
-      </motion.div>
+        />
+      </div>
 
-      {/* Map viz */}
       <OverviewMap items={items} onView={onView} />
 
-      {/* Errors */}
       {errors.length > 0 && (
-        <div className="card" style={{ padding: "12px 14px", borderColor: "rgba(251 191 36 / 0.25)", background: "var(--amber-dim)" }}>
-          <div style={{ display: "flex", gap: 7, alignItems: "center", color: "var(--amber)", fontWeight: 600, fontSize: "var(--t-md)", marginBottom: 6 }}>
-            <AlertTriangle size={17} /> {errors.length} scan warning{errors.length !== 1 ? "s" : ""}
+        <div className="card" style={{ padding: "10px 12px", borderColor: "rgba(251 191 36 / 0.28)", background: "var(--amber-dim)" }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--amber)", fontSize: "var(--t-sm)", fontWeight: 600, marginBottom: 4 }}>
+            <AlertTriangle size={14} /> {errors.length} scan warning{errors.length !== 1 ? "s" : ""}
           </div>
           {errors.map((e, i) => (
-            <div key={i} className="mono" style={{ fontSize: "var(--t-md)", color: "var(--tx-3)", lineHeight: 1.5 }}>{e}</div>
+            <div key={i} className="mono" style={{ fontSize: "var(--t-xs)", color: "var(--tx-3)", lineHeight: 1.6, overflowWrap: "anywhere" }}>{e}</div>
           ))}
         </div>
       )}
 
       {/* Recent */}
-      <motion.div
-        className="card"
-        style={{ overflow: "hidden" }}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-      >
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)", fontSize: "var(--t-md)", fontWeight: 600, color: "var(--tx-3)", letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace" }}>
-          RECENT CHANGES
+      <div className="card" style={{ overflow: "hidden" }}>
+        <div className="panel-head">
+          <span className="eyebrow">recent changes</span>
+          <span className="num faint" style={{ fontSize: "var(--t-2xs)" }}>{recent.length}</span>
         </div>
         {recent.length === 0 ? (
-          <div style={{ padding: "28px 14px", textAlign: "center", color: "var(--tx-3)", fontSize: "var(--t-md)" }}>
-            No items yet — hit Rescan
+          <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--tx-3)", fontSize: "var(--t-sm)" }}>
+            Nothing scanned yet.
           </div>
         ) : (
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: { opacity: 0 },
-              visible: {
-                opacity: 1,
-                transition: {
-                  staggerChildren: 0.05,
-                },
-              },
-            }}
-          >
-            {recent.map((it, i) => (
-              <motion.div
-                key={it.id}
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "8px 14px", borderBottom: i < recent.length - 1 ? "1px solid var(--line)" : "none", gap: 10,
-                }}
-                variants={{
-                  hidden: { opacity: 0, x: -10 },
-                  visible: { opacity: 1, x: 0 },
-                }}
-                whileHover={{ backgroundColor: "rgba(255,255,255,0.02)" }}
-                transition={{ duration: 0.2 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
-                  <span className="badge badge-default" style={{ flexShrink: 0 }}>{kindLabel(it.kind)}</span>
-                  <span className="truncate" style={{ fontSize: "var(--t-md)" }}>{it.name}</span>
-                </div>
-                <span style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", flexShrink: 0, fontFamily: "var(--font-mono), monospace" }}>
-                  {shortDate(it.modifiedAt)}
-                </span>
-              </motion.div>
-            ))}
-          </motion.div>
+          recent.map((it) => (
+            <div
+              key={it.id}
+              className={`row${onView ? " row-hover" : ""}`}
+              style={{ cursor: onView ? "pointer" : "default" }}
+              onClick={() => onView?.(it)}
+            >
+              <span className="badge badge-default" style={{ flexShrink: 0, minWidth: 66, justifyContent: "center" }}>
+                {kindLabel(it.kind)}
+              </span>
+              <span className="truncate" style={{ flex: 1, fontSize: "var(--t-base)" }}>{it.name}</span>
+              <span className="num faint" style={{ fontSize: "var(--t-2xs)", flexShrink: 0 }}>
+                {shortDate(it.modifiedAt)}
+              </span>
+            </div>
+          ))
         )}
-      </motion.div>
+      </div>
 
       {scannedAt && (
-        <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", fontFamily: "var(--font-mono), monospace" }}>
-          scanned · {new Date(scannedAt).toLocaleString()}
+        <div className="mono faint" style={{ fontSize: "var(--t-2xs)", letterSpacing: "0.04em" }}>
+          scanned {new Date(scannedAt).toLocaleString()}
         </div>
       )}
     </div>

@@ -77,7 +77,7 @@ export default function CommandPalette({
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  padding: "12px 14px",
+                  padding: "9px 11px",
                   borderBottom: "1px solid var(--line)",
                 }}
               >

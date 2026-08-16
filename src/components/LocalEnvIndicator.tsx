@@ -25,7 +25,7 @@ export default function LocalEnvIndicator() {
           background: "var(--bg-1)",
           border: "1px solid var(--line)",
           borderRadius: "8px",
-          padding: "10px 14px",
+          padding: "7px 11px",
           display: "flex",
           alignItems: "center",
           gap: 8,

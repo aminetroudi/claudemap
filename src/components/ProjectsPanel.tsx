@@ -31,7 +31,7 @@ export default function ProjectsPanel({
 
   if (allProjects.length === 0) {
     return (
-      <div className="card" style={{ padding: "40px 24px", textAlign: "center" }}>
+      <div className="card" style={{ padding: "32px 20px", textAlign: "center" }}>
         <div style={{ fontSize: "var(--t-2xl)", color: "var(--tx-2)", marginBottom: 8 }}>No projects discovered.</div>
         <div className="faint" style={{ fontSize: "var(--t-md)" }}>Rescan or add paths in Settings.</div>
       </div>
@@ -46,7 +46,7 @@ export default function ProjectsPanel({
         for (const it of projItems) byKind[it.kind] = (byKind[it.kind] ?? 0) + 1;
 
         return (
-          <div key={proj} className="card" style={{ padding: "14px 16px" }}>
+          <div key={proj} className="card" style={{ padding: "10px 12px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: projItems.length ? 10 : 0 }}>
               <FolderOpen size={15} style={{ color: "var(--ac)", flexShrink: 0 }} />
               <span
