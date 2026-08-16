@@ -13,6 +13,16 @@ export const SETTINGS_GLOBAL = path.join(CLAUDE_DIR, "settings.json");
 export const SETTINGS_LOCAL = path.join(CLAUDE_DIR, "settings.local.json");
 export const HOME_MCP_JSON = path.join(HOME, ".mcp.json");
 export const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
+
+// ── Background-job + session registries (Claude Code >= 2.1.220) ──────
+// `jobs/<short8>/` holds one background job's durable state and timeline;
+// `sessions/<pid>.json` is the live session registry the CLI itself writes
+// (pid, procStart, cwd, sessionId, status, name, jobId, socket path), which
+// supersedes scraping /proc. Both are read-only from claudemap's side.
+export const JOBS_DIR = path.join(CLAUDE_DIR, "jobs");
+export const JOBS_PINS = path.join(JOBS_DIR, "pins.json");
+export const SESSION_REGISTRY_DIR = path.join(CLAUDE_DIR, "sessions");
+export const DAEMON_STATUS = path.join(CLAUDE_DIR, "daemon.status.json");
 // IMPORTANT: do NOT freeze memory paths as top-level constants.
 // Turbopack / SWC constant-folds `pathToProjectKey(HOME)` at build time,
 // baking the build-machine's $HOME into the bundle. That breaks any

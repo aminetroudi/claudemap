@@ -13,6 +13,7 @@ import { extractContextUsage } from "./context";
 import { readLastEntries } from "./jsonl";
 import { resolveOrigin } from "./origin";
 import { collectLiveSessionIds, listClaudeProcesses, type ClaudeProcess } from "./process";
+import { registryProcesses } from "./registry";
 import {
   detectUnsandboxedCommands,
   determineStatus,
@@ -230,25 +231,46 @@ export async function discoverSessions(): Promise<LiveSession[]> {
     return []; // no ~/.claude/projects yet
   }
 
-  // Two independent signals:
-  //  - `claude agents --json` (+ ps) → process metadata (kind, attachId, pid)
-  //    keyed by sessionId, for background/dispatched sessions.
+  // Three signals, in descending order of authority:
+  //  - `~/.claude/sessions/<pid>.json` → the CLI's own registry (>= 2.1.220).
+  //    It STATES pid, cwd, sessionId, kind, jobId and procStart, so nothing
+  //    here is inferred. Registered sessions are liveness-checked in
+  //    registryProcesses() against /proc starttime, which defeats PID reuse.
+  //  - `claude agents --json` (+ ps) → same metadata for older CLIs, and for
+  //    anything the registry has not (yet) recorded.
   //  - liveSessionIds → exact liveness for EVERY session (incl. the top-level
   //    interactive one that `claude agents` omits), via /proc env vars.
-  const [procs, liveSessionIds] = await Promise.all([
+  const [registry, procs, liveSessionIds] = await Promise.all([
+    registryProcesses(),
     listClaudeProcesses(),
     collectLiveSessionIds(),
   ]);
   const bySessionId = new Map<string, ClaudeProcess>();
   const byEncodedCwd = new Map<string, ClaudeProcess[]>();
-  for (const p of procs) {
+  // Registry last: a later write wins in bySessionId, so it overrides the
+  // scraped record for any session both sources know about.
+  for (const p of [...procs, ...registry]) {
     if (p.sessionId) {
       bySessionId.set(p.sessionId, p);
-      liveSessionIds.add(p.sessionId); // agents-reported sessions are live too
+      liveSessionIds.add(p.sessionId); // both sources only report live sessions
     }
     const list = byEncodedCwd.get(p.encodedCwd);
     if (list) list.push(p);
     else byEncodedCwd.set(p.encodedCwd, [p]);
+  }
+  // byEncodedCwd only sizes the per-dir log window, so a session seen by both
+  // sources must not count twice.
+  for (const [key, list] of byEncodedCwd) {
+    const seen = new Set<string>();
+    byEncodedCwd.set(
+      key,
+      list.filter((p) => {
+        const id = p.sessionId ?? String(p.pid);
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      }),
+    );
   }
 
   const sessions: LiveSession[] = [];

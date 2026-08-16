@@ -1,41 +1,48 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { Activity, BookOpen, Bot, Box, Brain, Files, FolderOpen, LayoutDashboard, Moon, RefreshCw, Server, Settings, Store, Sun, Zap } from "lucide-react";
+import { Activity, BookOpen, Bot, Box, Brain, Files, FolderOpen, LayoutDashboard, ListChecks, Moon, Server, Settings, Store, Sun, Zap } from "lucide-react";
 import type { AnyItem, ItemKind } from "@/lib/types";
 import { getTheme, toggleTheme, type Theme } from "@/lib/theme";
 
 export type Section =
   | "overview" | "skill" | "plugin" | "agent" | "memory"
-  | "claude-md" | "loose-md" | "projects" | "sessions" | "mcp" | "marketplace" | "settings";
+  | "claude-md" | "loose-md" | "projects" | "sessions" | "jobs" | "mcp" | "marketplace" | "settings";
 
-const NAV: Array<{ id: Section; label: string; icon: React.ReactNode; kind?: ItemKind; sep?: boolean }> = [
-  { id: "overview",    label: "Overview",         icon: <LayoutDashboard size={18} /> },
-  { id: "skill",       label: "Skills",            icon: <Zap size={18} />,       kind: "skill" },
-  { id: "plugin",      label: "Plugins",           icon: <Box size={18} />,       kind: "plugin" },
-  { id: "agent",       label: "Agents",            icon: <Bot size={18} />,       kind: "agent" },
-  { id: "memory",      label: "Memory",            icon: <Brain size={18} />,     kind: "memory" },
-  { id: "claude-md",   label: "CLAUDE.md",         icon: <BookOpen size={18} />,  kind: "claude-md" },
-  { id: "loose-md",    label: "Loose .md",         icon: <Files size={18} />,     kind: "loose-md" },
-  { id: "projects",    label: "Projects",          icon: <FolderOpen size={18} /> },
-  { id: "sessions",    label: "Sessions",          icon: <Activity size={18} />, sep: true },
-  { id: "mcp",         label: "MCP Servers",       icon: <Server size={18} /> },
-  { id: "marketplace", label: "Browse & Install",  icon: <Store size={18} /> },
-  { id: "settings",    label: "Settings",          icon: <Settings size={18} /> },
+const ICON = 15;
+
+/** `group` opens a labelled band above the item — the flat 13-item list gave
+ *  no clue that half of it is on-disk config and half is live runtime. */
+const NAV: Array<{ id: Section; label: string; icon: React.ReactNode; kind?: ItemKind; group?: string }> = [
+  { id: "overview",    label: "Overview",         icon: <LayoutDashboard size={ICON} /> },
+  { id: "skill",       label: "Skills",            icon: <Zap size={ICON} />,       kind: "skill", group: "config" },
+  { id: "plugin",      label: "Plugins",           icon: <Box size={ICON} />,       kind: "plugin" },
+  { id: "agent",       label: "Agents",            icon: <Bot size={ICON} />,       kind: "agent" },
+  { id: "memory",      label: "Memory",            icon: <Brain size={ICON} />,     kind: "memory" },
+  { id: "claude-md",   label: "CLAUDE.md",         icon: <BookOpen size={ICON} />,  kind: "claude-md" },
+  { id: "loose-md",    label: "Loose .md",         icon: <Files size={ICON} />,     kind: "loose-md" },
+  { id: "projects",    label: "Projects",          icon: <FolderOpen size={ICON} /> },
+  { id: "sessions",    label: "Sessions",          icon: <Activity size={ICON} />,  group: "runtime" },
+  { id: "jobs",        label: "Jobs",              icon: <ListChecks size={ICON} /> },
+  { id: "mcp",         label: "MCP Servers",       icon: <Server size={ICON} /> },
+  { id: "marketplace", label: "Browse & Install",  icon: <Store size={ICON} />,     group: "manage" },
+  { id: "settings",    label: "Settings",          icon: <Settings size={ICON} /> },
 ];
 
 export default function Sidebar({
-  active, onChange, items, scannedAt, loading, onRescan, mcpCount, projectsCount,
+  active, onChange, items, loading, mcpCount, projectsCount,
+  jobsCount, jobsBlocked,
 }: {
   active: Section;
   onChange: (s: Section) => void;
   items: AnyItem[];
-  scannedAt?: string;
+  /** Rescan lives in the statusline now; this only drives the brand indicator. */
   loading: boolean;
-  onRescan: () => void;
   mcpCount?: number;
   projectsCount?: number;
+  jobsCount?: number;
+  /** Background jobs stopped waiting on a human — surfaced as an amber badge. */
+  jobsBlocked?: number;
 }) {
   const [theme, setThemeState] = useState<Theme | null>(null);
 
@@ -53,10 +60,11 @@ export default function Sidebar({
   for (const it of items) counts[it.kind] = (counts[it.kind] ?? 0) + 1;
   counts["mcp"] = mcpCount ?? 0;
   counts["projects"] = projectsCount ?? 0;
+  counts["jobs"] = jobsCount ?? 0;
 
   return (
     <aside className="sidebar" style={{
-      width: 270,
+      width: 208,
       flexShrink: 0,
       height: "100dvh",
       position: "sticky",
@@ -66,118 +74,79 @@ export default function Sidebar({
       background: "var(--bg-1)",
       borderRight: "1px solid var(--line)",
     }}>
-      {/* Brand */}
-      <div className="sidebar-brand" style={{ padding: "20px 16px 18px", borderBottom: "1px solid var(--line)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-            <rect width="36" height="36" rx="9" fill="url(#cg)" />
-            {/* constellation: clusters of dots connected by fine lines */}
-            <g stroke="white" strokeWidth="0.7" strokeLinecap="round" opacity="0.45" fill="none">
-              <line x1="11" y1="11" x2="24" y2="14" />
-              <line x1="24" y1="14" x2="18" y2="26" />
-              <line x1="11" y1="11" x2="18" y2="26" />
-              <line x1="24" y1="14" x2="27" y2="19" />
-              <line x1="11" y1="11" x2="9" y2="16" />
-            </g>
-            <g fill="white">
-              <circle cx="11" cy="11" r="1.7" />
-              <circle cx="9" cy="16" r="1.1" opacity="0.8" />
-              <circle cx="14" cy="14" r="1" opacity="0.7" />
-              <circle cx="24" cy="14" r="1.9" />
-              <circle cx="27" cy="19" r="1.2" opacity="0.8" />
-              <circle cx="22" cy="19" r="1" opacity="0.7" />
-              <circle cx="18" cy="26" r="1.7" />
-              <circle cx="14" cy="25" r="1" opacity="0.7" />
-              <circle cx="22" cy="27" r="1.1" opacity="0.8" />
-            </g>
-            <defs>
-              <linearGradient id="cg" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stopColor="#a78bfa"/>
-                <stop offset="100%" stopColor="#6366f1"/>
-              </linearGradient>
-            </defs>
-          </svg>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: "var(--t-xl)", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              Claudemap
-            </div>
-            <div style={{ fontSize: "var(--t-2xs)", color: "var(--tx-3)", marginTop: 1, letterSpacing: "0.01em" }}>
-              map your claude setup
-            </div>
-            {loading && !scannedAt && (
-              <div style={{ fontSize: "var(--t-sm)", color: "var(--ac)", marginTop: 2, animation: "pulse 1.4s ease-in-out infinite" }}>
-                Scanning…
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Brand — a mark, not a hero. Mono wordmark keeps it in the toolchain
+          register rather than the landing-page one. */}
+      <div className="sidebar-brand" style={{ display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 12px", borderBottom: "1px solid var(--line)" }}>
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }} aria-hidden>
+          <rect x="0.5" y="0.5" width="17" height="17" rx="4" stroke="var(--ac)" strokeWidth="1" />
+          <g stroke="var(--ac)" strokeWidth="0.8" strokeLinecap="round" opacity="0.55">
+            <line x1="5.5" y1="5.5" x2="12" y2="7" />
+            <line x1="12" y1="7" x2="9" y2="12.5" />
+            <line x1="5.5" y1="5.5" x2="9" y2="12.5" />
+          </g>
+          <g fill="var(--ac)">
+            <circle cx="5.5" cy="5.5" r="1.5" />
+            <circle cx="12" cy="7" r="1.5" />
+            <circle cx="9" cy="12.5" r="1.5" />
+          </g>
+        </svg>
+        <span className="mono" style={{ fontSize: "var(--t-md)", fontWeight: 600, letterSpacing: "-0.02em" }}>
+          claudemap
+        </span>
+        {loading && <span className="dot dot-live" style={{ marginLeft: "auto", background: "var(--ac)" }} title="Scanning…" />}
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, overflowY: "auto", padding: "10px 10px" }}>
+      <nav style={{ flex: 1, overflowY: "auto", padding: "6px 6px 10px" }}>
         {NAV.map((n) => {
           const count = n.kind != null
             ? (counts[n.kind] ?? 0)
             : n.id === "mcp" ? (counts["mcp"] ?? 0)
             : n.id === "projects" ? (counts["projects"] ?? 0)
+            : n.id === "jobs" ? (counts["jobs"] ?? 0)
             : undefined;
+          // A blocked job is the one thing in the nav that wants attention now.
+          const blocked = n.id === "jobs" && (jobsBlocked ?? 0) > 0;
           return (
             <div key={n.id}>
-              {n.sep && <div className="divider" style={{ margin: "6px 2px 6px" }} />}
+              {n.group && (
+                <div className="eyebrow" style={{ padding: "12px 9px 4px" }}>{n.group}</div>
+              )}
               <button
                 className={`nav-item${active === n.id ? " active" : ""}`}
                 onClick={() => onChange(n.id)}
               >
-                <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  {n.icon}
-                  {n.label}
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <span style={{ display: "flex", opacity: active === n.id ? 1 : 0.65 }}>{n.icon}</span>
+                  <span className="truncate">{n.label}</span>
                 </span>
-                {count != null && count > 0 && (
-                  <span className="badge badge-default" style={{ fontSize: "var(--t-sm)" }}>{count}</span>
-                )}
+                {blocked ? (
+                  <span className="badge badge-amber">{jobsBlocked}</span>
+                ) : count != null && count > 0 ? (
+                  <span className="nav-count">{count}</span>
+                ) : null}
               </button>
             </div>
           );
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="sidebar-footer" style={{ padding: "10px 8px 12px", borderTop: "1px solid var(--line)" }}>
-        <button
-          className="btn"
-          style={{ width: "100%", justifyContent: "center" }}
-          onClick={onRescan}
-          disabled={loading}
-        >
-          <RefreshCw size={16} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          {loading ? "Scanning…" : "Rescan"}
-        </button>
+      {/* Footer — origin of the data, and the theme switch. Nothing else. */}
+      <div className="sidebar-footer" style={{ padding: "8px 10px", borderTop: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span className="mono" style={{ fontSize: "var(--t-2xs)", color: "var(--tx-3)", letterSpacing: "0.04em" }}>
+          ~/.claude · {items.length}
+        </span>
         {theme !== null && (
-          <motion.button
+          <button
             className="btn btn-ghost btn-icon"
-            style={{ width: "100%", marginTop: 6 }}
+            style={{ width: 22, minWidth: 22, height: 22 }}
             onClick={handleThemeToggle}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
             title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label="Toggle theme"
           >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </motion.button>
+            {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
         )}
-        <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", textAlign: "center", marginTop: 7, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span>{items.length} items</span>
-          {scannedAt && (
-            <>
-              <span style={{ opacity: 0.4 }}>·</span>
-              <span style={{ fontFamily: "var(--font-mono), monospace" }}>
-                {new Date(scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </>
-          )}
-        </div>
-        <div style={{ fontSize: "var(--t-2xs)", color: "var(--tx-3)", textAlign: "center", marginTop: 4, fontFamily: "var(--font-mono), monospace", letterSpacing: "0.03em" }}>
-          local ~/
-        </div>
       </div>
     </aside>
   );

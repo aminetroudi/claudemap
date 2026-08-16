@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, Eye, EyeOff, GitBranch, History, Radio, Skull, TerminalSquare, Wifi, WifiOff } from "lucide-react";
+import { Activity, BarChart3, Eye, EyeOff, GitBranch, History, MessageSquare, Radio, Skull, TerminalSquare, Wifi, WifiOff } from "lucide-react";
 import { fetchSessions, killGhosts, openSessionTerminal } from "@/lib/client";
 import { contextWindowForModel, EXTENDED_CONTEXT_WINDOW } from "@/lib/sessions/context";
 import type { LiveSession, SessionStatus } from "@/lib/sessions/types";
 import HistoryView from "./sessions/HistoryView";
 import SessionDrawer from "./sessions/SessionDrawer";
+import PromptsView from "./sessions/PromptsView";
 import UsageView from "./sessions/UsageView";
 import { formatTokens, relativeTime } from "./sessions/format";
 
@@ -27,14 +28,15 @@ const STATUS_META: Record<SessionStatus, { dot: string; label: string; color: st
 
 const SUMMARY_ORDER: SessionStatus[] = ["working", "needs_input", "waiting"];
 
-type Tab = "live" | "history" | "usage";
+type Tab = "live" | "history" | "prompts" | "usage";
 type ConnState = "connecting" | "live" | "reconnecting";
 type OpenFn = (file: string, label: string) => void;
 
 const TABS: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
-  { id: "live", label: "Live", icon: <Radio size={15} /> },
-  { id: "history", label: "History", icon: <History size={15} /> },
-  { id: "usage", label: "Usage", icon: <BarChart3 size={15} /> },
+  { id: "live", label: "live", icon: <Radio size={12} /> },
+  { id: "history", label: "history", icon: <History size={12} /> },
+  { id: "prompts", label: "prompts", icon: <MessageSquare size={12} /> },
+  { id: "usage", label: "usage", icon: <BarChart3 size={12} /> },
 ];
 
 // ── SessionsPanel ─────────────────────────────────────────────────
@@ -74,21 +76,15 @@ export default function SessionsPanel() {
   }, []);
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div style={{ display: "grid", gap: 12 }}>
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 4, borderBottom: "1px solid var(--line)", paddingBottom: 2 }}>
+      <div className="seg" role="tablist" aria-label="Sessions view" style={{ alignSelf: "start" }}>
         {TABS.map((t) => (
           <button
             key={t.id}
-            className="btn"
+            role="tab"
+            aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            style={{
-              border: "none",
-              borderRadius: 0,
-              borderBottom: tab === t.id ? "2px solid var(--ac)" : "2px solid transparent",
-              color: tab === t.id ? "var(--tx-1)" : "var(--tx-3)",
-              background: "none",
-            }}
           >
             {t.icon}
             {t.label}
@@ -100,10 +96,10 @@ export default function SessionsPanel() {
         <div
           onClick={() => setNotice(null)}
           style={{
-            padding: "10px 14px",
+            padding: "8px 12px",
             borderRadius: "var(--r)",
             cursor: "pointer",
-            fontSize: "var(--t-md)",
+            fontSize: "var(--t-sm)",
             background: notice.kind === "ok" ? "var(--green-dim)" : "var(--red-dim)",
             border: `1px solid ${notice.kind === "ok" ? "rgba(52 211 153 / 0.25)" : "rgba(248 113 113 / 0.25)"}`,
             color: notice.kind === "ok" ? "var(--green)" : "var(--red)",
@@ -130,6 +126,7 @@ export default function SessionsPanel() {
           onToggleAutomated={toggleAutomated}
         />
       )}
+      {tab === "prompts" && <PromptsView />}
       {tab === "usage" && <UsageView />}
 
       {drawer && (
@@ -296,17 +293,17 @@ function LiveView({
   };
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
-        <div style={{ display: "flex", gap: 18, alignItems: "center", fontSize: "var(--t-md)", flexWrap: "wrap" }}>
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div className="mono" style={{ display: "flex", gap: 14, alignItems: "center", fontSize: "var(--t-xs)", flexWrap: "wrap" }}>
           {sessions === null ? (
             <span style={{ color: "var(--tx-3)" }}>Scanning sessions…</span>
           ) : (
             counts.map(({ st, meta, n }) => (
-              <span key={st} style={{ color: meta.color, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span key={st} style={{ color: meta.color, display: "inline-flex", alignItems: "center", gap: 5 }}>
                 <span>{meta.dot}</span>
-                <span style={{ color: "var(--tx-2)" }}>
-                  {meta.label}: <strong style={{ color: meta.color }}>{n}</strong>
+                <span style={{ color: "var(--tx-3)" }}>
+                  {meta.label} <strong style={{ color: meta.color, fontWeight: 600 }}>{n}</strong>
                 </span>
               </span>
             ))
@@ -328,16 +325,16 @@ function LiveView({
       </div>
 
       {errMsg && (
-        <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-md)" }}>
+        <div style={{ padding: "7px 11px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-sm)" }}>
           {errMsg}
         </div>
       )}
 
       {sessions !== null && list.length === 0 && !errMsg && (
-        <div className="card" style={{ padding: "48px", textAlign: "center" }}>
-          <Activity size={32} style={{ color: "var(--tx-3)", margin: "0 auto 14px" }} />
-          <div style={{ fontSize: "var(--t-xl)", color: "var(--tx-2)", marginBottom: 6 }}>No active sessions</div>
-          <div style={{ fontSize: "var(--t-md)", color: "var(--tx-3)" }}>
+        <div className="card" style={{ padding: "36px 20px", textAlign: "center" }}>
+          <Activity size={22} style={{ color: "var(--tx-3)", margin: "0 auto 10px" }} />
+          <div style={{ fontSize: "var(--t-md)", color: "var(--tx-2)", marginBottom: 4 }}>No active sessions</div>
+          <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)" }}>
             Claude Code sessions from the last hour will appear here.
           </div>
         </div>
@@ -345,7 +342,7 @@ function LiveView({
 
       {list.length > 0 && (
         <div className="card" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: "var(--t-md)" }}>
+          <table style={{ width: "100%", minWidth: 720, borderCollapse: "collapse", fontSize: "var(--t-base)" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--line)" }}>
                 <Th>Status</Th>
@@ -386,7 +383,7 @@ function ConnBadge({ conn }: { conn: ConnState }) {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th style={{ textAlign: "left", padding: "10px 14px", fontSize: "var(--t-sm)", fontWeight: 600, color: "var(--tx-3)", whiteSpace: "nowrap" }}>
+    <th className="eyebrow" style={{ textAlign: "left", padding: "7px 10px", whiteSpace: "nowrap", borderBottom: "1px solid var(--line)" }}>
       {children}
     </th>
   );
@@ -430,11 +427,11 @@ function SessionRow({
       style={{ borderBottom: "1px solid var(--line)", cursor: "pointer" }}
       onClick={() => onOpen(s.logFile, s.project)}
     >
-      <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+      <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>
         <span style={{ color: meta.color, marginRight: 7 }}>{meta.dot}</span>
         <span style={{ color: meta.color }}>{meta.label}</span>
       </td>
-      <td style={{ padding: "10px 14px", maxWidth: 260 }}>
+      <td style={{ padding: "6px 10px", maxWidth: 260 }}>
         <div className="truncate" style={{ fontWeight: 600 }} title={s.projectPath ?? s.project}>
           {s.project}
         </div>
@@ -461,10 +458,10 @@ function SessionRow({
           )}
         </div>
       </td>
-      <td style={{ padding: "10px 14px" }}>
+      <td style={{ padding: "6px 10px" }}>
         <ContextBar percent={s.contextPercent} tokens={s.contextTokens} model={s.model} />
       </td>
-      <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+      <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>
         {s.gitBranch ? (
           <span className="mono" style={{ fontSize: "var(--t-sm)", display: "inline-flex", alignItems: "center", gap: 5 }}>
             <GitBranch size={13} style={{ color: "var(--tx-3)" }} />
@@ -474,15 +471,15 @@ function SessionRow({
           <span className="faint">—</span>
         )}
       </td>
-      <td style={{ padding: "10px 14px", whiteSpace: "nowrap", color: "var(--tx-2)" }} title={s.lastActivity}>
+      <td style={{ padding: "6px 10px", whiteSpace: "nowrap", color: "var(--tx-2)" }} title={s.lastActivity}>
         {relativeTime(s.lastActivity)}
       </td>
-      <td style={{ padding: "10px 14px", maxWidth: 420 }}>
+      <td style={{ padding: "6px 10px", maxWidth: 420 }}>
         <div className="truncate" style={{ color: "var(--tx-2)" }} title={s.lastMessage ?? detail}>
           {detail}
         </div>
       </td>
-      <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+      <td style={{ padding: "6px 10px", whiteSpace: "nowrap" }}>
         <ActionButton label={action.label} payload={action.payload} onTerminal={onTerminal} />
       </td>
     </tr>

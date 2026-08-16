@@ -166,6 +166,93 @@ export interface SessionMetrics {
   error?: string;
 }
 
+// ── Background jobs (~/.claude/jobs/<short8>/) ───────────────────────
+// Claude Code's own durable background-job records, written by the agents
+// daemon. claudemap only reads them; the daemon owns the state machine.
+
+export type JobState = "working" | "done" | "blocked";
+
+/** Append-only progress line from `jobs/<short8>/timeline.jsonl`. */
+export interface JobTimelineEntry {
+  at: string; // ISO
+  state: JobState;
+  detail: string;
+  /** Free-form narrative the job emitted alongside the transition. */
+  text?: string;
+}
+
+export interface Job {
+  /** Short 8-hex id — the directory name, and what `claude attach <id>` takes. */
+  id: string;
+  state: JobState;
+  /** One-line human summary of where the job is right now. */
+  detail?: string;
+  /** Pacing hint the daemon records ("idle" when nothing is in flight). */
+  tempo?: string;
+  inFlight?: { tasks: number; queued: number; kinds: string[] };
+  tokens?: number;
+  /** Structured completion payload, present once the job reaches `done`. */
+  result?: string;
+  /** Why the job stopped, and the reply it suggests — only when `blocked`. */
+  needs?: string;
+  suggestedReply?: string;
+  /** What the job was started to do, and its display name. */
+  intent?: string;
+  name?: string;
+  nameSource?: "user" | "auto" | string;
+  sessionId?: string;
+  resumeSessionId?: string;
+  cwd?: string;
+  project?: string;
+  /** Flags the daemon would re-launch this job with. */
+  respawnFlags?: string[];
+  model?: string;
+  permissionMode?: string;
+  template?: string;
+  backend?: string;
+  cliVersion?: string;
+  createdAt?: string; // ISO
+  updatedAt?: string; // ISO
+  /** True when listed in `jobs/pins.json`. */
+  pinned?: boolean;
+  /** Session log the daemon scans for progress, when recorded. */
+  logFile?: string;
+  /** Whether a live process currently claims this job id. */
+  live?: boolean;
+}
+
+export interface JobsResult {
+  jobs: Job[];
+  error?: string;
+  /** Per-directory read failures; a bad job never hides the good ones. */
+  errors?: string[];
+}
+
+// ── Live session registry (~/.claude/sessions/<pid>.json) ────────────
+// Written by the CLI itself. Authoritative for pid/cwd/sessionId/status —
+// no /proc scraping required. `procStart` is the PID-reuse guard.
+
+export interface RegistrySession {
+  pid: number;
+  procStart: string;
+  sessionId: string;
+  cwd: string;
+  startedAt: number; // epoch ms
+  version?: string;
+  kind?: "interactive" | "bg";
+  entrypoint?: string;
+  /** Unix socket this session listens on for messages. 0600, same uid. */
+  messagingSocketPath?: string;
+  peerProtocol?: number;
+  name?: string;
+  nameSource?: string;
+  jobId?: string;
+  status?: "idle" | "busy" | string;
+  updatedAt?: number;
+  /** False when the pid is gone or its start time no longer matches. */
+  alive?: boolean;
+}
+
 // ── JSONL log entry shapes (internal, parsed from ~/.claude/projects logs) ──
 
 /** Token usage — only the 4 top-level fields; the real payload is a superset. */

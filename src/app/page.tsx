@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { RefreshCw } from "lucide-react";
 import Sidebar, { type Section } from "@/components/Sidebar";
 import ItemRow from "@/components/ItemRow";
 import Viewer from "@/components/Viewer";
@@ -13,14 +13,17 @@ import { SkeletonFullPage, SkeletonList } from "@/components/Skeleton";
 import ProjectsPanel from "@/components/ProjectsPanel";
 import McpPanel from "@/components/McpPanel";
 import SessionsPanel from "@/components/SessionsPanel";
+import JobsPanel from "@/components/JobsPanel";
 import {
   fetchItems,
+  fetchJobs,
   fetchMarketplaces,
   fetchMcp,
   fetchProjects,
   kindLabel,
 } from "@/lib/client";
 import type { AnyItem, ItemKind, McpResult, ScanResult } from "@/lib/types";
+import type { Job } from "@/lib/sessions/types";
 
 type LocalMarketplace = {
   name: string;
@@ -49,6 +52,7 @@ export default function Home() {
   const [scopeFilter, setScopeFilter] = useState<"all" | "global" | "project">("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [viewing, setViewing] = useState<AnyItem | null>(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,7 +74,21 @@ export default function Home() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Jobs are polled independently of the item scan: the nav badge has to stay
+  // honest about blocked jobs while you are looking at some other section.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () =>
+      fetchJobs()
+        .then((r) => !cancelled && setJobs(r.jobs ?? []))
+        .catch(() => {});
+    tick();
+    const id = setInterval(tick, 15_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   const allItems = scan?.items ?? [];
+  const blockedJobs = jobs.filter((j) => j.state === "blocked").length;
 
   const kind = SECTION_TO_KIND[section];
   let filtered = kind ? allItems.filter((i) => i.kind === kind) : allItems;
@@ -109,6 +127,7 @@ export default function Home() {
     "loose-md": "Loose Markdown",
     projects: "Projects",
     sessions: "Sessions",
+    jobs: "Background Jobs",
     mcp: "MCP Servers",
     marketplace: "Browse & Install",
     settings: "Settings",
@@ -124,6 +143,7 @@ export default function Home() {
     { id: "loose-md", label: "Loose .md", icon: null },
     { id: "projects", label: "Projects", icon: null },
     { id: "sessions", label: "Sessions", icon: null },
+    { id: "jobs", label: "Jobs", icon: null },
     { id: "mcp", label: "MCP Servers", icon: null },
     { id: "marketplace", label: "Browse & Install", icon: null },
     { id: "settings", label: "Settings", icon: null },
@@ -141,29 +161,60 @@ export default function Home() {
         active={section}
         onChange={(s) => { setSection(s); setSearch(""); }}
         items={allItems}
-        scannedAt={scan?.scannedAt}
         loading={loading}
-        onRescan={load}
         mcpCount={mcpResult.servers.length + (mcpResult.cloudServers?.length ?? 0)}
         projectsCount={projects.length}
+        jobsCount={jobs.length}
+        jobsBlocked={blockedJobs}
       />
 
-      <main className="app-main" style={{ flex: 1, padding: "2rem 2.5rem", minWidth: 0, overflowY: "auto", maxHeight: "100dvh" }}>
-        <h1 style={{ fontSize: "var(--t-3xl)", fontWeight: 700, marginBottom: 24, letterSpacing: "-0.02em" }}>
-          {sectionTitle[section]}
-        </h1>
-
-        <AnimatePresence mode="wait">
-          {scan === null && <SkeletonFullPage key="skeleton" />}
-
-          {scan !== null && section === "overview" && (
-            <motion.div
-              key="overview"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+      <main className="app-main" style={{ flex: 1, minWidth: 0, overflowY: "auto", maxHeight: "100dvh" }}>
+        {/* Sticky readout. Replaces the old per-section <h1>, which restated
+            the sidebar's active state and burned 60px before any data. */}
+        <div className="statusline">
+          <h1>{sectionTitle[section]}</h1>
+          <div className="readout">
+            <span><b>{allItems.length}</b> items</span>
+            <span aria-hidden style={{ opacity: 0.35 }}>·</span>
+            {blockedJobs > 0 ? (
+              <button
+                className="badge badge-amber"
+                style={{ cursor: "pointer" }}
+                onClick={() => setSection("jobs")}
+                title="Background jobs waiting on you"
+              >
+                <span className="dot dot-warn" />
+                {blockedJobs} blocked
+              </button>
+            ) : (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span className={jobs.length > 0 ? "dot dot-live" : "dot"} />
+                <b>{jobs.length}</b> jobs
+              </span>
+            )}
+            <span aria-hidden style={{ opacity: 0.35 }}>·</span>
+            <span className="truncate">
+              {scan?.scannedAt
+                ? new Date(scan.scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "—"}
+            </span>
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={load}
+              disabled={loading}
+              title="Rescan ~/.claude"
+              aria-label="Rescan"
             >
+              <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+            </button>
+          </div>
+        </div>
+
+        {scan === null && <SkeletonFullPage />}
+
+        {scan !== null && (
+          <div key={section} className="fade-in">
+            {section === "overview" && (
               <OverviewPanel
                 items={allItems}
                 scannedAt={scan?.scannedAt}
@@ -171,41 +222,13 @@ export default function Home() {
                 onSection={setSection}
                 onView={setViewing}
               />
-            </motion.div>
-          )}
+            )}
 
-          {scan !== null && section === "projects" && (
-            <motion.div
-              key="projects"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <ProjectsPanel items={allItems} projects={projects} />
-            </motion.div>
-          )}
+            {section === "projects" && <ProjectsPanel items={allItems} projects={projects} />}
+            {section === "sessions" && <SessionsPanel />}
+            {section === "jobs" && <JobsPanel />}
 
-          {scan !== null && section === "sessions" && (
-            <motion.div
-              key="sessions"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <SessionsPanel />
-            </motion.div>
-          )}
-
-          {scan !== null && section === "mcp" && (
-            <motion.div
-              key="mcp"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            {section === "mcp" && (
               <McpPanel
                 servers={mcpResult.servers}
                 cloudServers={mcpResult.cloudServers ?? []}
@@ -213,129 +236,78 @@ export default function Home() {
                 projects={projects}
                 onChanged={load}
               />
-            </motion.div>
-          )}
+            )}
 
-          {scan !== null && section === "marketplace" && (
-            <motion.div
-              key="marketplace"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
+            {section === "marketplace" && (
               <MarketplacePanel marketplaces={marketplaces} installedPlugins={installedPlugins} onInstalled={load} />
-            </motion.div>
-          )}
+            )}
 
-          {scan !== null && section === "settings" && (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <SettingsPanel onSaved={load} />
-            </motion.div>
-          )}
+            {section === "settings" && <SettingsPanel onSaved={load} />}
 
-          {scan !== null && kind && (
-            <motion.div
-              key="list"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-                <input
-                  className="input"
-                  style={{ flex: 1, minWidth: 200 }}
-                  placeholder={`Search ${kindLabel(kind).toLowerCase()}s…`}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <select
-                  className="input"
-                  style={{ width: "auto" }}
-                  value={scopeFilter}
-                  onChange={(e) => setScopeFilter(e.target.value as "all" | "global" | "project")}
-                >
-                  <option value="all">All scopes</option>
-                  <option value="global">Global only</option>
-                  <option value="project">Project only</option>
-                </select>
-                {itemProjects.length > 0 && (
+            {kind && (
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+                  <input
+                    className="input"
+                    style={{ flex: 1, minWidth: 180 }}
+                    placeholder={`Filter ${kindLabel(kind).toLowerCase()}s…`}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
                   <select
                     className="input"
-                    style={{ width: "auto", maxWidth: 260 }}
-                    value={projectFilter}
-                    onChange={(e) => setProjectFilter(e.target.value)}
+                    style={{ width: "auto" }}
+                    value={scopeFilter}
+                    onChange={(e) => setScopeFilter(e.target.value as "all" | "global" | "project")}
                   >
-                    <option value="all">All projects</option>
-                    <option value="__global">Global (no project)</option>
-                    {itemProjects.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
+                    <option value="all">All scopes</option>
+                    <option value="global">Global only</option>
+                    <option value="project">Project only</option>
                   </select>
-                )}
-                <div className="faint" style={{ display: "flex", alignItems: "center", fontSize: "0.8rem" }}>
-                  {filtered.length} item{filtered.length !== 1 ? "s" : ""}
+                  {itemProjects.length > 0 && (
+                    <select
+                      className="input"
+                      style={{ width: "auto", maxWidth: 240 }}
+                      value={projectFilter}
+                      onChange={(e) => setProjectFilter(e.target.value)}
+                    >
+                      <option value="all">All projects</option>
+                      <option value="__global">Global (no project)</option>
+                      {itemProjects.map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  )}
+                  <span className="num faint" style={{ fontSize: "var(--t-xs)", paddingLeft: 2 }}>
+                    {filtered.length}/{(kind ? allItems.filter((i) => i.kind === kind) : allItems).length}
+                  </span>
                 </div>
-              </div>
 
-              {loading && <SkeletonList count={5} />}
-              {!loading && filtered.length === 0 && (
-                <motion.div
-                  className="card"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  style={{ padding: "40px 24px", textAlign: "center" }}
-                >
-                  <div style={{ fontSize: "var(--t-2xl)", color: "var(--tx-2)", marginBottom: 8 }}>
-                    No {kindLabel(kind).toLowerCase()}s found.
+                {loading && <SkeletonList count={5} />}
+                {!loading && filtered.length === 0 && (
+                  <div className="card" style={{ padding: "32px 20px", textAlign: "center" }}>
+                    <div style={{ fontSize: "var(--t-md)", color: "var(--tx-2)", marginBottom: 4 }}>
+                      No {kindLabel(kind).toLowerCase()}s match.
+                    </div>
+                    <div className="faint" style={{ fontSize: "var(--t-sm)" }}>
+                      Adjust the filters, or rescan.
+                    </div>
                   </div>
-                  <div className="faint" style={{ fontSize: "var(--t-md)" }}>
-                    Try adjusting filters or rescanning.
-                  </div>
-                </motion.div>
-              )}
-              <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  hidden: { opacity: 0 },
-                  visible: {
-                    opacity: 1,
-                    transition: {
-                      staggerChildren: 0.05,
-                      delayChildren: 0.1,
-                    },
-                  },
-                }}
-              >
+                )}
+
                 {filtered.map((it) => (
-                  <motion.div
+                  <ItemRow
                     key={it.id}
-                    variants={{
-                      hidden: { opacity: 0, y: 10 },
-                      visible: { opacity: 1, y: 0 },
-                    }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ItemRow
-                      item={it}
-                      projects={projects}
-                      onChanged={load}
-                      onView={setViewing}
-                    />
-                  </motion.div>
+                    item={it}
+                    projects={projects}
+                    onChanged={load}
+                    onView={setViewing}
+                  />
                 ))}
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </>
+            )}
+          </div>
+        )}
       </main>
 
       {viewing && (

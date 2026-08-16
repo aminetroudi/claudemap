@@ -1,11 +1,15 @@
 import type { AnyItem, AppConfig, McpResult, ScanResult } from "./types";
 import type {
   HistoryResult,
+  JobTimelineEntry,
+  JobsResult,
   SessionMetrics,
   SessionsResult,
   TimelineResult,
   UsageResult,
 } from "./sessions/types";
+import type { Subagent } from "./sessions/subagents";
+import type { ActivityResult } from "./sessions/prompts";
 
 export async function fetchItems(): Promise<ScanResult> {
   const r = await fetch("/api/items", { cache: "no-store" });
@@ -57,6 +61,57 @@ export async function fetchMetrics(file: string): Promise<SessionMetrics> {
   const r = await fetch(`/api/sessions/metrics?file=${encodeURIComponent(file)}`, {
     cache: "no-store",
   });
+  return r.json();
+}
+
+export async function fetchJobs(): Promise<JobsResult> {
+  const r = await fetch("/api/jobs", { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchJobTimeline(id: string): Promise<JobTimelineEntry[]> {
+  const r = await fetch(`/api/jobs/timeline?id=${encodeURIComponent(id)}`, {
+    cache: "no-store",
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j.entries;
+}
+
+export async function searchPrompts(
+  q: string,
+  opts: { limit?: number; project?: string } = {},
+): Promise<{
+  entries: Array<{
+    text: string;
+    project: string;
+    sessionId: string;
+    at: string;
+    hasPaste?: boolean;
+  }>;
+  total: number;
+  scanned: number;
+  projects: string[];
+  error?: string;
+}> {
+  const p = new URLSearchParams({ q });
+  if (opts.limit) p.set("limit", String(opts.limit));
+  if (opts.project) p.set("project", opts.project);
+  const r = await fetch(`/api/prompts?${p}`, { cache: "no-store" });
+  return r.json();
+}
+
+export async function fetchSubagents(file: string): Promise<Subagent[]> {
+  const r = await fetch(`/api/sessions/subagents?file=${encodeURIComponent(file)}`, {
+    cache: "no-store",
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j.subagents;
+}
+
+export async function fetchActivity(days = 182): Promise<ActivityResult & { error?: string }> {
+  const r = await fetch(`/api/activity?days=${days}`, { cache: "no-store" });
   return r.json();
 }
 

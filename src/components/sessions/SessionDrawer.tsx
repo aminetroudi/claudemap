@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { X } from "lucide-react";
-import { fetchMetrics, fetchTimeline } from "@/lib/client";
+import { Bot, ChevronRight, X } from "lucide-react";
+import { fetchMetrics, fetchSubagents, fetchTimeline } from "@/lib/client";
 import type { SessionMetrics, TimelineEntry } from "@/lib/sessions/types";
-import { formatTokens } from "./format";
+import type { Subagent } from "@/lib/sessions/subagents";
+import { formatDuration, formatTokens } from "./format";
 
 const PAGE = 50;
 type Filter = "all" | "assistant" | "user";
@@ -26,6 +27,19 @@ export default function SessionDrawer({
   const [filter, setFilter] = useState<Filter>("all");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [subagents, setSubagents] = useState<Subagent[]>([]);
+
+  // Subagents: most sessions have none, so a failure here is never surfaced —
+  // it just leaves the section absent.
+  useEffect(() => {
+    let cancelled = false;
+    fetchSubagents(file)
+      .then((s) => !cancelled && setSubagents(s))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [file]);
 
   // Metrics: load once per file.
   useEffect(() => {
@@ -107,7 +121,7 @@ export default function SessionDrawer({
         transition={{ type: "tween", duration: 0.22 }}
       >
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div style={{ minWidth: 0 }}>
             <div className="truncate" style={{ fontWeight: 700, fontSize: "var(--t-xl)" }} title={title}>{title}</div>
             <div className="truncate faint mono" style={{ fontSize: "var(--t-sm)", marginTop: 2 }} title={file}>{file}</div>
@@ -118,7 +132,7 @@ export default function SessionDrawer({
         {/* Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px", display: "grid", gap: 18 }}>
           {err && (
-            <div style={{ padding: "10px 14px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-sm)" }}>
+            <div style={{ padding: "7px 11px", borderRadius: "var(--r)", background: "var(--red-dim)", border: "1px solid rgba(248 113 113 / 0.2)", color: "var(--red)", fontSize: "var(--t-sm)" }}>
               {err}
             </div>
           )}
@@ -145,6 +159,21 @@ export default function SessionDrawer({
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {topTools.map(([tool, n]) => (
                   <span key={tool} className="badge badge-default">{tool} · {n}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Subagents this session delegated to */}
+          {subagents.length > 0 && (
+            <div>
+              <div style={{ fontSize: "var(--t-sm)", color: "var(--tx-3)", marginBottom: 8, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                <Bot size={14} />
+                Subagents ({subagents.length})
+              </div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {subagents.map((s) => (
+                  <SubagentRow key={s.agentId} agent={s} />
                 ))}
               </div>
             </div>
@@ -209,6 +238,90 @@ const TYPE_COLOR: Record<string, string> = {
   system: "var(--tx-3)",
   summary: "var(--amber)",
 };
+
+/** One delegated subagent run: its task, and its answer on expand. */
+function SubagentRow({ agent }: { agent: Subagent }) {
+  const [open, setOpen] = useState(false);
+  const ms =
+    agent.startedAt && agent.endedAt
+      ? Date.parse(agent.endedAt) - Date.parse(agent.startedAt)
+      : 0;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%",
+          background: "none",
+          border: "none",
+          textAlign: "left",
+          cursor: "pointer",
+          padding: "9px 11px",
+          display: "flex",
+          gap: 9,
+          alignItems: "flex-start",
+          color: "inherit",
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: "block",
+              fontSize: "var(--t-md)",
+              color: "var(--tx-1)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: open ? "normal" : "nowrap",
+            }}
+          >
+            {agent.task || "(no task recorded)"}
+          </span>
+          <span
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              marginTop: 4,
+              fontSize: "var(--t-2xs)",
+              color: "var(--tx-3)",
+            }}
+          >
+            <span className="mono">{agent.agentId.slice(0, 8)}</span>
+            <span>{agent.messageCount} msgs</span>
+            {agent.outputTokens != null && <span>{formatTokens(agent.outputTokens)} out</span>}
+            {ms > 0 && <span>{formatDuration(ms)}</span>}
+          </span>
+        </span>
+        <ChevronRight
+          size={15}
+          style={{
+            flexShrink: 0,
+            marginTop: 2,
+            color: "var(--tx-3)",
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 0.15s var(--ease)",
+          }}
+        />
+      </button>
+      {open && agent.result && (
+        <div
+          style={{
+            padding: "9px 11px",
+            borderTop: "1px solid var(--line)",
+            fontSize: "var(--t-sm)",
+            color: "var(--tx-2)",
+            whiteSpace: "pre-wrap",
+            maxHeight: 320,
+            overflowY: "auto",
+          }}
+        >
+          {agent.result}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TimelineRow({ entry }: { entry: TimelineEntry }) {
   const color = TYPE_COLOR[entry.type] ?? "var(--tx-3)";

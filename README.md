@@ -87,8 +87,9 @@ Your data (skills, plugins, settings, sessions) is read live from `~/.claude/` v
 
 | Section       | What you see                                                                 |
 | ------------- | ---------------------------------------------------------------------------- |
-| Overview      | Stat grid + recent changes across your whole Claude setup                    |
-| **Sessions**  | **Live Claude Code sessions, history, and usage** (see below)                |
+| Overview      | Stat grid, a file **tree** / **activity** heatmap toggle, and recent changes |
+| **Sessions**  | **Live Claude Code sessions, history, prompt search, and usage** (see below) |
+| **Jobs**      | **Background jobs: state, blocked reasons, results, timelines** (see below)  |
 | Skills        | All skills (global + project), view/edit `SKILL.md`, promote/demote          |
 | Plugins       | Installed plugins, enable/disable, uninstall                                 |
 | Agents        | Agent definitions, scope (global vs project), edit frontmatter               |
@@ -106,13 +107,14 @@ Plus a `⌘K` command palette for quick navigation and item search.
 
 ## Sessions
 
-A live monitor for your Claude Code sessions, parsed from `~/.claude/projects/*/*.jsonl` and the `claude agents` process list. Three tabs:
+A live monitor for your Claude Code sessions, parsed from `~/.claude/projects/*/*.jsonl`, the `~/.claude/sessions/` registry the CLI itself writes, and the `claude agents` process list. Four tabs:
 
 - **Live** — currently-active sessions (working / needs input / waiting), updated every ~2 s over SSE. Per row: status, project, **context-window bar** (with `(1M)` for extended-window models), origin (terminal/IDE — incl. **Tilix**, which upstream tooling misses), git branch, last activity, and the current task. Inactive sessions drop to History.
 - **History** — past sessions within a day window, grouped Today / Yesterday / date, filterable by project or first prompt.
+- **Prompts** — literal search across **every prompt you have ever submitted**, read from `~/.claude/history.jsonl`. Filter by project, jump straight to `claude --resume` for the session a prompt came from. No index to build: the CLI already records the prompt text, project, timestamp, and session id.
 - **Usage** — local token usage over a rolling 5-hour window per session, plus your **API quota** (5-hour / 7-day utilization bars with reset countdowns) and Claude service status.
 
-Click any row for a **detail drawer**: token/turn/tool metrics and a paginated, filterable message timeline.
+Click any row for a **detail drawer**: token/turn/tool metrics, the **subagents** that session delegated to (task, message count, output tokens, duration, and the answer each returned — read from `projects/<key>/<uuid>/subagents/agent-*.jsonl`, which the session list itself deliberately hides), and a paginated, filterable message timeline.
 
 **Actions** (per row):
 
@@ -125,6 +127,20 @@ Click any row for a **detail drawer**: token/turn/tool metrics and a paginated, 
 
 - Plugin/skill/hook-spawned sessions (e.g. claude-mem observers) are **hidden by default** — toggle "Show plugin sessions".
 - Sessions whose working directory is under a configured **excludePath** (Settings) are filtered out entirely.
+
+---
+
+## Jobs
+
+A cross-project console for Claude Code's **background jobs**, read from `~/.claude/jobs/<id>/`. The agents daemon owns the state machine and the respawn policy; claudemap only reports it — nothing here dispatches, retries, or schedules work.
+
+Jobs sort **pinned first, then blocked, then by last activity**, because a blocked job is the only thing on the page that wants something from you right now. The nav badge turns amber and counts them, so you see it from any other section.
+
+Per job: state (`working` / `blocked` / `done`), the daemon's one-line detail, project, model, tokens spent, in-flight and queued task counts, and last activity. Expand for intent, working directory, permission mode, template, backend, CLI version, the structured result once it finishes, and the full append-only transition timeline from `timeline.jsonl`.
+
+**Blocked jobs** surface inline, without expanding: what the job `needs`, the `suggestedReply` it drafted for you, a one-click copy, and **Attach** (still running) or **Resume** (exited) into the job's own working directory.
+
+> claudemap does **not** write to a job's message socket. Every session registers a `messagingSocketPath` under `/run/user/<uid>/cc-socks/`, but its wire protocol is undocumented; sending on it blind risks wedging a live session. Unblocking goes through a real terminal, the same way you would do it by hand.
 
 ---
 
@@ -174,7 +190,9 @@ A server started outside a graphical shell inherits no `DISPLAY`, which used to 
 
 ### macOS
 
-Not supported today, but the gap is small and PRs are welcome — macOS is POSIX, so `ps`, the launcher script, `claude` on `PATH`, project-key encoding, and the Memory view all work as-is. What needs a platform shim is process `cwd` (`lsof -p <pid> -a -d cwd`), process environ (`ps eww -p <pid>`, own uid only), and terminal spawning (`open -a` / `osascript`). That reaches near-parity with Linux, unlike Windows, where per-process cwd and environ are simply not exposed.
+Not supported today, but the gap has narrowed and PRs are welcome — macOS is POSIX, so `ps`, the launcher script, `claude` on `PATH`, project-key encoding, the Jobs and Prompts views, and the Memory view all work as-is. The `~/.claude/sessions/` registry now *states* each session's pid, cwd, sessionId, kind and jobId, so the `lsof`/`ps eww` shims that used to be needed to recover them are no longer on the critical path.
+
+What still needs a platform shim: process liveness (`registry.ts` reads `/proc/<pid>/stat` field 22 for the PID-reuse guard — macOS would use `ps -o lstart`), origin detection, and terminal spawning (`open -a` / `osascript`). That reaches near-parity with Linux, unlike Windows, where per-process cwd and environ are simply not exposed.
 
 ### iOS
 
@@ -191,7 +209,9 @@ Read this before you run it, and before reporting anything as a vulnerability.
 **What it can do, by design:**
 
 - **Read and write everything under `~/.claude/`** — skills, agents, settings, `MEMORY.md`, `~/.claude.json`, `~/.mcp.json`. Editing and toggling from the UI writes real files.
-- **Read your Claude Code session logs** in `~/.claude/projects/*/*.jsonl`, which contain full prompt and response transcripts.
+- **Read your Claude Code session logs** in `~/.claude/projects/*/*.jsonl`, which contain full prompt and response transcripts — including subagent transcripts under `<uuid>/subagents/`.
+- **Read your entire prompt history** from `~/.claude/history.jsonl` and make it searchable. That is every prompt you have ever typed, across every project, in one box.
+- **Read background job records** from `~/.claude/jobs/`, which include each job's intent, result, and blocked-state detail.
 - **Read your OAuth access token** from `~/.claude/.credentials.json`, server-side, to fetch the quota view. It stays in the server process; responses carry utilization percentages only.
 - **Spawn graphical terminals** running `claude attach` / `claude --resume`, and **send SIGTERM** to processes it identifies as idle `claude` sessions.
 - **Invoke `claude plugin install`** when you install from the Marketplace tab.
@@ -215,7 +235,9 @@ The mitigations behind the model above. This is a **local power-user tool**, not
 
 - The server binds to **`127.0.0.1` only** (`claudemap.sh`). It has no auth — **never expose the port**.
 - Mutating API routes enforce a **same-origin check** (`src/middleware.ts`): a malicious page can't silently POST/PUT/DELETE to the local API.
-- The session **timeline/metrics** endpoints resolve symlinks and require the target under `~/.claude/projects/` ending in `.jsonl` — no arbitrary file read.
+- The session **timeline/metrics/subagents** endpoints resolve symlinks and require the target under `~/.claude/projects/` ending in `.jsonl` — no arbitrary file read. The subagents endpoint derives its sidecar directory from the already-guarded path, so it adds no new input.
+- The **jobs** endpoints take a job id matched against `^[0-9a-f]{8}$` before it reaches the filesystem; **prompts** reads one fixed file. Neither accepts a caller-supplied path.
+- The per-session **peer tokens** in `~/.claude/sessions/*.key` are never read, and claudemap never opens a session's message socket — see the note under [Jobs](#jobs).
 - Terminal spawning uses **argv arrays only** with strict regex-validated tokens (attach id, session UUID) and a cwd that must resolve under `$HOME` — no shell-string interpolation.
 - Ghost kill is **SIGTERM only**, after re-verifying the PID still maps to a `claude` process.
 - Your **OAuth token** (read for the quota view) never leaves the server — responses carry utilization percentages only, never the token.
@@ -260,12 +282,13 @@ scripts/
 src/
   app/
     api/                  # REST handlers (items, mcp, file, actions, config,
-                          #   projects, marketplaces, search, sessions/*)
+                          #   projects, marketplaces, search, prompts,
+                          #   jobs/*, sessions/*)
     layout.tsx            # root layout, next/font, metadata
     page.tsx              # single-page shell
   components/             # Sidebar, Viewer, panels, CommandPalette, …
     sessions/             # SessionsPanel deps: HistoryView, SessionDrawer,
-                          #   UsageView, format helpers
+                          #   PromptsView, UsageView, format helpers
   lib/
     paths.ts              # derives all ~/.claude file locations from $HOME
     config.ts             # dashboard's own config (scan paths, excludePaths)
@@ -274,7 +297,9 @@ src/
     scanners/             # per-kind scanners (skills, agents, plugins, mcp, …)
     sessions/             # session monitor: discover, jsonl, status, context,
                           #   origin, history, timeline, usage, quota, ghosts,
-                          #   terminal, classify, pathguard, hub
+                          #   terminal, classify, pathguard, hub,
+                          #   registry (CLI session registry), jobs,
+                          #   subagents, prompts
   middleware.ts           # same-origin CSRF hardening
 public/
   icon-192.png, icon-512.png, manifest.json
@@ -290,6 +315,10 @@ All derived from `$HOME` in `src/lib/paths.ts`:
 | --------------------------------------------- | -------------------------------------------- |
 | `~/.claude/`                                  | Skills, agents, plugins, marketplaces, settings, projects |
 | `~/.claude/projects/<key>/*.jsonl`            | Session logs (Sessions monitor)              |
+| `~/.claude/projects/<key>/<uuid>/subagents/`  | Subagent transcripts (session detail drawer) |
+| `~/.claude/sessions/<pid>.json`               | CLI session registry — pid, cwd, sessionId, status, jobId |
+| `~/.claude/jobs/<id>/`                        | Background job state + timeline (Jobs view)  |
+| `~/.claude/history.jsonl`                     | Prompt history (Sessions → Prompts, Overview → activity) |
 | `~/.claude/.credentials.json`                 | OAuth token (read server-side for quota; never returned) |
 | `~/.claude/claude-dashboard.config.json`      | This app's own config (scan paths, excludes) |
 | `~/.claude.json`                              | Claude's main config (includes `mcpServers`) |
